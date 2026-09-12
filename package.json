@@ -1,0 +1,25 @@
+{
+  "name": "almefleh-warehouse",
+  "version": "1.0.0",
+  "description": "نظام مستودعات المفلح - إدارة المخزون وكشوفات الحسابات",
+  "type": "commonjs",
+  "main": "src/server.js",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "migrate": "node scripts/migrate.js",
+    "seed": "node scripts/seed.js",
+    "test": "node --test test/",
+    "backup": "node -e \"require('./src/jobs/backup').runBackup().then(r=>console.log(r))\""
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.6",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "node-cron": "^3.0.3",
+    "pg": "^8.13.1"
+  }
+}
