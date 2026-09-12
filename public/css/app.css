@@ -121,10 +121,10 @@ input[type="number"] { text-align: right; }
 }
 .btn:hover { background: var(--green-600); }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
-.btn.gold { background: var(--gold-500); color: var(--green-900); }
-.btn.gold:hover { background: var(--gold-400); }
 .btn.ghost { background: transparent; color: var(--green-800); border: 1px solid var(--line); }
 .btn.ghost:hover { background: var(--cream); }
+.btn.gold { background: var(--gold-500); color: var(--green-900); border-color: var(--gold-500); }
+.btn.gold:hover { background: var(--gold-400); }
 .btn.danger { background: var(--danger); }
 .btn.sm { padding: 5px 10px; font-size: 13px; border-radius: 7px; }
 
