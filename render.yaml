@@ -1,0 +1,42 @@
+# نشر نظام مستودعات المفلح على Render (الخطة المجانية)
+services:
+  - type: web
+    name: almefleh-warehouse
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: APP_TIMEZONE
+        value: Asia/Amman
+      - key: CURRENCY
+        value: د.أ
+      - key: DATABASE_SSL
+        value: "true"
+      - key: BACKUP_ENABLED
+        value: "true"
+      - key: BACKUP_CRON
+        value: "0 * * * *"
+      # القيم السرّية بتتحط من لوحة Render مباشرة (مش هون)
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CRED_KEY
+        generateValue: true
+      - key: SEED_ADMIN_PASSWORD
+        sync: false
+      - key: SEED_DEFAULT_PASSWORD
+        sync: false
+      - key: GDRIVE_CLIENT_ID
+        sync: false
+      - key: GDRIVE_CLIENT_SECRET
+        sync: false
+      - key: GDRIVE_REFRESH_TOKEN
+        sync: false
+      - key: GDRIVE_FOLDER_ID
+        sync: false

@@ -45,11 +45,16 @@ app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/requests', require('./routes/requests'));
 app.use('/api/proposals', require('./routes/proposals'));
 
+// شعار المفلح: بيستعمل logo.png إذا انحطّ بالفولدر، وإلا الرسمة المتجهة
+const LOGO_PATH = require('fs').existsSync(path.join(__dirname, '..', 'public', 'assets', 'logo.png'))
+  ? '/assets/logo.png' : '/assets/logo.svg';
+
 app.get('/api/config', (req, res) => {
   res.json({
     app_name: config.appName,
     currency: config.currency,
     timezone: config.timezone,
+    logo: LOGO_PATH,
     user: req.user || null,
   });
 });

@@ -10,7 +10,7 @@
     "dev": "node --watch src/server.js",
     "migrate": "node scripts/migrate.js",
     "seed": "node scripts/seed.js",
-    "test": "node --test test/",
+    "test": "node --test test/*.test.js",
     "backup": "node -e \"require('./src/jobs/backup').runBackup().then(r=>console.log(r))\""
   },
   "dependencies": {

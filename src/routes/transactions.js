@@ -7,6 +7,7 @@ const { logAudit, diffFields } = require('../lib/audit');
 const { notifyAll, notifyAdmins, TYPES } = require('../lib/notify');
 const { parseQuantity, parseAmount, formatQuantity } = require('../lib/quantity');
 const dates = require('../lib/dates');
+const { resolvePeriod, hasPeriod } = require('../lib/period');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -127,9 +128,17 @@ router.get('/', asyncHandler(async (req, res) => {
   if (req.query.kind && ALL_KINDS.includes(req.query.kind)) {
     params.push(req.query.kind); where.push(`v.kind = $${params.length}`);
   }
-  if (req.query.from) { params.push(new Date(req.query.from)); where.push(`v.occurred_at >= $${params.length}`); }
-  if (req.query.to)   { params.push(new Date(req.query.to));   where.push(`v.occurred_at < $${params.length}`); }
+  if (hasPeriod(req.query)) {
+    const period = resolvePeriod(req.query);
+    params.push(period.from); where.push(`v.occurred_at >= $${params.length}`);
+    params.push(period.to);   where.push(`v.occurred_at < $${params.length}`);
+  }
   if (String(req.query.pending_price || '') === 'true') where.push('v.price_pending');
+  // "حركاتي أنا" - بتستعملها شاشة التسجيل عشان تعرض اللي سجّله المستخدم بس
+  if (String(req.query.mine || '') === 'true') {
+    params.push(req.user.id);
+    where.push(`v.created_by = $${params.length}`);
+  }
 
   const limit = Math.min(Number(req.query.limit || 200), 1000);
   params.push(limit);

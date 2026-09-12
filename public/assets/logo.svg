@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 120" role="img" aria-label="المفلح">
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#E7C868"/><stop offset="0.5" stop-color="#C9A227"/><stop offset="1" stop-color="#9C7A12"/>
+    </linearGradient>
+    <linearGradient id="green" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1B5E3F"/><stop offset="1" stop-color="#0B3D2C"/>
+    </linearGradient>
+  </defs>
+  <!-- شكل الشعار: درع/شريط -->
+  <path d="M8 34 L160 16 L312 34 L300 92 L160 108 L20 92 Z" fill="url(#gold)"/>
+  <path d="M16 39 L160 23 L304 39 L293 87 L160 101 L27 87 Z" fill="url(#green)"/>
+  <!-- شجرة الزيتون -->
+  <g fill="#E7C868" transform="translate(160,40) scale(0.85)">
+    <rect x="-1.6" y="-2" width="3.2" height="12" rx="1"/>
+    <path d="M0 -4 C-9 -4 -14 -9 -13 -14 C-8 -17 -2 -14 0 -9 C2 -14 8 -17 13 -14 C14 -9 9 -4 0 -4 Z"/>
+    <ellipse cx="-7" cy="-9" rx="4.5" ry="2.6" transform="rotate(-22 -7 -9)"/>
+    <ellipse cx="7" cy="-9" rx="4.5" ry="2.6" transform="rotate(22 7 -9)"/>
+  </g>
+  <text x="160" y="76" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif"
+        font-size="30" font-weight="700" letter-spacing="2.5" fill="#FFFFFF">ALMEFLEH</text>
+  <text x="160" y="93" text-anchor="middle" font-family="Georgia, serif" font-size="11"
+        font-style="italic" letter-spacing="1.5" fill="#E7C868">Since 1972</text>
+</svg>

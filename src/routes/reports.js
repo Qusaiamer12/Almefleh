@@ -5,24 +5,10 @@ const { asyncHandler } = require('../middleware/errors');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { priceAt } = require('../lib/pricing');
 const { round } = require('../lib/quantity');
-const dates = require('../lib/dates');
+const { resolvePeriod } = require('../lib/period');
 
 const router = express.Router();
 router.use(requireAuth, requireRole('admin', 'viewer'));
-
-function resolvePeriod(query) {
-  if (query.from && query.to) {
-    const range = dates.customRange(query.from, query.to);
-    return { ...range, label: `من ${query.from} إلى ${query.to}`, type: 'custom' };
-  }
-  const offset = Number(query.week || 0);
-  const range = dates.weekRangeOffset(offset);
-  return {
-    ...range,
-    label: `أسبوع ${dates.toDateString(range.from)} → ${dates.toDateString(new Date(range.to.getTime() - 1))}`,
-    type: 'week', offset,
-  };
-}
 
 /**
  * تقرير النقص/الفاقد: المتوقع حسب المقادير مقابل الفعلي اللي رجع من المشغل.

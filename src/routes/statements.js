@@ -3,28 +3,11 @@ const express = require('express');
 const db = require('../db');
 const { asyncHandler } = require('../middleware/errors');
 const { requireAuth } = require('../middleware/auth');
-const dates = require('../lib/dates');
+const { resolvePeriod } = require('../lib/period');
 const { KIND_LABELS } = require('./transactions');
 
 const router = express.Router();
 router.use(requireAuth);
-
-/** تحديد الفترة: أسبوع جاهز (يبلّش السبت) أو مدى مخصّص */
-function resolvePeriod(query) {
-  if (query.from && query.to) {
-    const range = dates.customRange(query.from, query.to);
-    return { ...range, label: `من ${query.from} إلى ${query.to}`, type: 'custom' };
-  }
-  const offset = Number(query.week || 0);
-  const range = dates.weekRangeOffset(offset);
-  const endDay = new Date(range.to.getTime() - 1);
-  return {
-    ...range,
-    label: `أسبوع ${dates.toDateString(range.from)} → ${dates.toDateString(endDay)}`,
-    type: 'week',
-    offset,
-  };
-}
 
 /** منع الزبون من رؤية غير حسابه */
 function assertAccess(user, entityId) {
