@@ -3,13 +3,23 @@ const jwt = require('jsonwebtoken');
 const config = require('../config');
 const db = require('../db');
 
-const COOKIE_NAME = 'almefleh_session';
+// بادئة __Host- بتمنع أي نطاق فرعي من يزرع كوكي جلسة (بتشتغل مع HTTPS بس)
+const COOKIE_NAME = config.env === 'production' ? '__Host-almefleh_session' : 'almefleh_session';
 
+/**
+ * التوكن بيحمل ختم وقت بيانات الدخول (cv). إذا تغيّرت كلمة السر أو اليوزر،
+ * الختم بيتغيّر وكل التوكنات القديمة بتصير غير صالحة فوراً.
+ */
 function signToken(user) {
   return jwt.sign(
-    { uid: user.id, role: user.role, entity_id: user.entity_id ?? null },
+    {
+      uid: user.id,
+      role: user.role,
+      entity_id: user.entity_id ?? null,
+      cv: user.credentials_changed_at ? new Date(user.credentials_changed_at).getTime() : 0,
+    },
     config.jwtSecret,
-    { expiresIn: `${config.sessionHours}h` },
+    { expiresIn: `${config.sessionHours}h`, algorithm: 'HS256' },
   );
 }
 
@@ -18,12 +28,15 @@ function setAuthCookie(res, token) {
     httpOnly: true,
     sameSite: 'lax',
     secure: config.env === 'production',
+    path: '/',
     maxAge: config.sessionHours * 3600 * 1000,
   });
 }
 
 function clearAuthCookie(res) {
-  res.clearCookie(COOKIE_NAME, { httpOnly: true, sameSite: 'lax', secure: config.env === 'production' });
+  res.clearCookie(COOKIE_NAME, {
+    httpOnly: true, sameSite: 'lax', path: '/', secure: config.env === 'production',
+  });
 }
 
 /** بيحمّل المستخدم من الكوكي (بدون منع الوصول) */
@@ -31,15 +44,28 @@ async function loadUser(req, _res, next) {
   const token = req.cookies?.[COOKIE_NAME];
   if (!token) return next();
   try {
-    const payload = jwt.verify(token, config.jwtSecret);
+    const payload = jwt.verify(token, config.jwtSecret, { algorithms: ['HS256'] });
     const { rows } = await db.query(
       `SELECT u.id, u.username, u.display_name, u.role, u.entity_id, u.active,
-              u.notifications_on, e.name AS entity_name
+              u.notifications_on, u.credentials_changed_at, u.locked_until,
+              e.name AS entity_name
        FROM users u LEFT JOIN entities e ON e.id = u.entity_id
        WHERE u.id = $1`,
       [payload.uid],
     );
-    if (rows[0] && rows[0].active) req.user = rows[0];
+    const user = rows[0];
+    if (!user || !user.active) return next();
+
+    // الجلسة بتنتهي إذا تغيّرت بيانات الدخول بعد إصدار التوكن
+    const credentialStamp = new Date(user.credentials_changed_at).getTime();
+    if ((payload.cv || 0) < credentialStamp) {
+      clearAuthCookie(res);
+      return next();
+    }
+    // حساب متوقّف مؤقتاً => الجلسة موقوفة كمان
+    if (user.locked_until && new Date(user.locked_until) > new Date()) return next();
+
+    req.user = user;
   } catch { /* توكن منتهي أو غير صالح */ }
   next();
 }

@@ -3,6 +3,12 @@ import { h, clear, toast, modal, dateTime, qty, money, METHOD_LABELS } from '../
 
 const ARABIC_LETTERS = 'أبتثجحخدذرزسشصضطظعغفقكلمنهوي'.split('');
 
+/** رمز فريد لكل محاولة تسجيل - بيمنع تسجيل نفس الحركة مرتين */
+function newToken() {
+  if (crypto.randomUUID) return crypto.randomUUID().replace(/-/g, '');
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`;
+}
+
 const KINDS = [
   { value: 'supply', label: 'توريد', needsEntity: false, entityType: null },
   { value: 'customer_out', label: 'سحب زبون', needsEntity: true, entityType: 'customer' },
@@ -195,6 +201,7 @@ export async function renderRecorder(root) {
       : h('div.keypad', {}, h('button', { type: 'button', style: 'grid-column:1/-1', onclick: () => press('C') }, 'مسح'));
 
     const note = h('input', { type: 'text', placeholder: 'ملاحظة (اختياري)' });
+    const token = newToken(); // ثابت لهاي النافذة: أي إعادة إرسال بترجّع نفس الحركة
 
     return modal({
       title: `${ui.kind.label} — ${item.name}`,
@@ -212,10 +219,13 @@ export async function renderRecorder(root) {
           item_id: item.id,
           quantity: value,
           note: note.value.trim() || undefined,
+          client_token: token,
         };
         const result = await api.post('/api/transactions', payload);
         showWarnings(result.warnings);
-        toast(`تم: ${ui.kind.label} — ${item.name} (${value})`);
+        toast(result.duplicate
+          ? 'هاي الحركة مسجّلة أصلاً - ما انسجّلت مرتين'
+          : `تم: ${ui.kind.label} — ${item.name} (${value})`);
         loadRecent();
       },
     });
@@ -228,6 +238,7 @@ export async function renderRecorder(root) {
       h('option', { value: 'bank' }, 'تحويل بنكي'),
       h('option', { value: 'check' }, 'شيك'));
     const note = h('input', { type: 'text', placeholder: 'رقم الشيك / ملاحظة (اختياري)' });
+    const token = newToken();
 
     return modal({
       title: 'تسجيل دفعة',
@@ -238,14 +249,15 @@ export async function renderRecorder(root) {
         h('label.field', {}, 'ملاحظة', note)),
       onConfirm: async () => {
         if (!amount.value.trim()) throw new Error('أدخل المبلغ');
-        await api.post('/api/transactions', {
+        const result = await api.post('/api/transactions', {
           kind: 'payment',
           entity_id: ui.entityId,
           payment_amount: amount.value.trim(),
           method: method.value,
           note: note.value.trim() || undefined,
+          client_token: token,
         });
-        toast('تم تسجيل الدفعة');
+        toast(result.duplicate ? 'الدفعة مسجّلة أصلاً' : 'تم تسجيل الدفعة');
         loadRecent();
       },
     });

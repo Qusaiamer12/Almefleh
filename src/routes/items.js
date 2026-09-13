@@ -6,6 +6,26 @@ const { requireAuth, requireRole, canSeeMoney } = require('../middleware/auth');
 const { logAudit, diffFields } = require('../lib/audit');
 const { notifyAdmins, TYPES } = require('../lib/notify');
 const { priceAt, bomCost, buildPriceProposals } = require('../lib/pricing');
+const { validate } = require('../lib/validate');
+
+const NEW_ITEM_SCHEMA = {
+  name: { type: 'string', required: true, minLength: 1, maxLength: 120, label: 'اسم الصنف' },
+  unit: { type: 'enum', values: ['piece', 'kg'], default: 'piece', label: 'وحدة القياس' },
+  price: { type: 'number', min: 0, max: 1e9, label: 'السعر' },
+  effective_from: { type: 'date', label: 'تاريخ السريان' },
+};
+
+const PATCH_ITEM_SCHEMA = {
+  name: { type: 'string', minLength: 1, maxLength: 120, label: 'اسم الصنف' },
+  unit: { type: 'enum', values: ['piece', 'kg'], label: 'وحدة القياس' },
+  active: { type: 'boolean', label: 'الحالة' },
+};
+
+const PRICE_SCHEMA = {
+  price: { type: 'number', required: true, min: 0, max: 1e9, label: 'السعر' },
+  effective_from: { type: 'date', label: 'تاريخ السريان' },
+  note: { type: 'string', maxLength: 200, label: 'الملاحظة' },
+};
 
 const router = express.Router();
 router.use(requireAuth);
@@ -53,34 +73,37 @@ router.get('/letters', asyncHandler(async (_req, res) => {
 
 /** إضافة صنف: الأدمن بيحط سعر، والمسجّل (عبود) بيضيف بدون سعر */
 router.post('/', requireRole('admin', 'recorder'), asyncHandler(async (req, res) => {
-  const name = String(req.body?.name || '').trim();
-  const unit = req.body?.unit === 'kg' ? 'kg' : 'piece';
-  if (!name) return res.status(400).json({ error: 'اسم الصنف مطلوب' });
-
-  const exists = await db.query('SELECT id FROM items WHERE lower(name) = lower($1)', [name]);
-  if (exists.rows[0]) return res.status(409).json({ error: 'في صنف بنفس الاسم' });
-
-  const { rows } = await db.query(
-    'INSERT INTO items (name, unit, created_by) VALUES ($1,$2,$3) RETURNING *',
-    [name, unit, req.user.id],
-  );
-  const item = rows[0];
+  const input = validate(req.body, NEW_ITEM_SCHEMA);
+  const name = input.name;
+  const unit = input.unit || 'piece';
 
   // الأدمن بس بيقدر يحط سعر مباشرة
-  let price = null;
-  if (req.user.role === 'admin' && req.body?.price != null && req.body.price !== '') {
-    price = Number(req.body.price);
-    if (!(price >= 0)) return res.status(400).json({ error: 'سعر غير صالح' });
-    const effectiveFrom = req.body.effective_from ? new Date(req.body.effective_from) : new Date();
-    await db.query(
-      'INSERT INTO item_prices (item_id, price, effective_from, created_by, note) VALUES ($1,$2,$3,$4,$5)',
-      [item.id, price, effectiveFrom, req.user.id, 'سعر أوّلي'],
-    );
-  }
+  const price = (req.user.role === 'admin' && input.price != null) ? input.price : null;
+  const effectiveFrom = input.effective_from || new Date();
 
-  await logAudit(db, {
-    user: req.user, action: 'create', table: 'items', recordId: item.id,
-    after: { ...item, price }, summary: `إضافة صنف: ${name}`, ip: req.ip,
+  // الصنف وسعره الأوّلي بينحفظوا مع بعض: يا الاتنين يا ولا واحد
+  const item = await db.withTransaction(async (client) => {
+    const { rows } = await client.query(
+      'INSERT INTO items (name, unit, created_by) VALUES ($1,$2,$3) RETURNING *',
+      [name, unit, req.user.id],
+    );
+    const created = rows[0];
+
+    if (price != null) {
+      await client.query(
+        'INSERT INTO item_prices (item_id, price, effective_from, created_by, note) VALUES ($1,$2,$3,$4,$5)',
+        [created.id, price, effectiveFrom, req.user.id, 'سعر أوّلي'],
+      );
+    }
+    await logAudit(client, {
+      user: req.user, action: 'create', table: 'items', recordId: created.id,
+      after: { ...created, price }, summary: `إضافة صنف: ${name}`, ip: req.ip,
+    });
+    return created;
+  }).catch((err) => {
+    // الفهرس الفريد بالقاعدة بيمسك التكرار حتى لو إجا طلبين بنفس اللحظة
+    if (err.code === '23505') { const e = new Error('في صنف بنفس الاسم'); e.status = 409; throw e; }
+    throw err;
   });
 
   // الصنف اللي انضاف بدون سعر لازم الأدمن ينتبهله
@@ -103,9 +126,10 @@ router.patch('/:id', requireRole('admin'), asyncHandler(async (req, res) => {
   const before = existing[0];
   if (!before) return res.status(404).json({ error: 'الصنف غير موجود' });
 
-  const name = req.body?.name != null ? String(req.body.name).trim() : before.name;
-  const unit = req.body?.unit != null ? (req.body.unit === 'kg' ? 'kg' : 'piece') : before.unit;
-  const active = req.body?.active != null ? !!req.body.active : before.active;
+  const input = validate(req.body, PATCH_ITEM_SCHEMA);
+  const name = input.name ?? before.name;
+  const unit = input.unit ?? before.unit;
+  const active = input.active ?? before.active;
 
   if (unit !== before.unit) {
     const used = await db.query(
@@ -146,11 +170,10 @@ router.get('/:id/prices', requireRole('admin', 'viewer'), asyncHandler(async (re
  */
 router.post('/:id/prices', requireRole('admin'), asyncHandler(async (req, res) => {
   const itemId = Number(req.params.id);
-  const price = Number(req.body?.price);
-  if (!Number.isFinite(price) || price < 0) return res.status(400).json({ error: 'سعر غير صالح' });
-
-  const effectiveFrom = req.body?.effective_from ? new Date(req.body.effective_from) : new Date();
-  if (Number.isNaN(effectiveFrom.getTime())) return res.status(400).json({ error: 'تاريخ سريان غير صالح' });
+  if (!Number.isInteger(itemId) || itemId < 1) return res.status(400).json({ error: 'رقم صنف غير صالح' });
+  const input = validate(req.body, PRICE_SCHEMA);
+  const price = input.price;
+  const effectiveFrom = input.effective_from || new Date();
 
   const { rows: itemRows } = await db.query('SELECT * FROM items WHERE id = $1', [itemId]);
   const item = itemRows[0];
@@ -164,7 +187,7 @@ router.post('/:id/prices', requireRole('admin'), asyncHandler(async (req, res) =
        VALUES ($1,$2,$3,$4,$5)
        ON CONFLICT (item_id, effective_from)
        DO UPDATE SET price = EXCLUDED.price, note = EXCLUDED.note, created_by = EXCLUDED.created_by`,
-      [itemId, price, effectiveFrom, req.body?.note || null, req.user.id],
+      [itemId, price, effectiveFrom, input.note || null, req.user.id],
     );
 
     await logAudit(client, {
@@ -256,13 +279,25 @@ router.get('/:id/recipe', requireRole('admin', 'viewer'), asyncHandler(async (re
 /** حفظ الوصفة كاملة (استبدال) - أدمن فقط */
 router.put('/:id/recipe', requireRole('admin'), asyncHandler(async (req, res) => {
   const itemId = Number(req.params.id);
+  if (!Number.isInteger(itemId) || itemId < 1) return res.status(400).json({ error: 'رقم صنف غير صالح' });
   const components = Array.isArray(req.body?.components) ? req.body.components : [];
+  if (components.length > 50) return res.status(400).json({ error: 'عدد المكوّنات كتير' });
 
+  const seen = new Set();
   for (const c of components) {
-    if (Number(c.component_item_id) === itemId) {
+    const componentId = Number(c?.component_item_id);
+    if (!Number.isInteger(componentId) || componentId < 1) {
+      return res.status(400).json({ error: 'مكوّن غير صالح' });
+    }
+    if (componentId === itemId) {
       return res.status(400).json({ error: 'ما بينفع الصنف يكون مكوّن حاله' });
     }
-    if (!(Number(c.quantity_per_unit) > 0)) {
+    if (seen.has(componentId)) {
+      return res.status(400).json({ error: 'في مكوّن مكرّر بالوصفة' });
+    }
+    seen.add(componentId);
+    const quantity = Number(c?.quantity_per_unit);
+    if (!(quantity > 0) || quantity > 1e6) {
       return res.status(400).json({ error: 'كمية المكوّن لازم تكون أكبر من صفر' });
     }
   }

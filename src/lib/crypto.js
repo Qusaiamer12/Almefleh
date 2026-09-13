@@ -45,10 +45,28 @@ function verifyPassword(plain, hash) {
   catch { return false; }
 }
 
-/** التحقق من قوة كلمة السر (بسيطة ومناسبة لفريق صغير) */
-function validatePassword(plain) {
+// كلمات سر ممنوعة (الأكتر استعمالاً + أسماء مرتبطة بالنظام)
+const WEAK_PASSWORDS = new Set([
+  '12345678', '123456789', '1234567890', 'password', 'password1', 'qwerty123',
+  'almefleh', 'almefleh1', 'warehouse', 'admin123', 'abcd1234', '11111111',
+  '00000000', 'iloveyou', 'sunshine', 'princess', 'football',
+]);
+
+/**
+ * سياسة كلمة السر: ٨ خانات على الأقل، فيها حرف ورقم،
+ * ومش من قائمة الكلمات الضعيفة المعروفة.
+ */
+function validatePassword(plain, { username } = {}) {
   const p = String(plain || '');
-  if (p.length < 6) return 'كلمة السر لازم تكون ٦ خانات على الأقل';
+  if (p.length < 8) return 'كلمة السر لازم تكون ٨ خانات على الأقل';
+  if (p.length > 200) return 'كلمة السر طويلة كتير';
+  if (!/[A-Za-z\u0600-\u06FF]/.test(p)) return 'كلمة السر لازم تحتوي على حرف واحد على الأقل';
+  if (!/[0-9]/.test(p)) return 'كلمة السر لازم تحتوي على رقم واحد على الأقل';
+  if (WEAK_PASSWORDS.has(p.toLowerCase())) return 'كلمة السر سهلة التخمين - اختار وحدة تانية';
+  if (/^(.)\1+$/.test(p)) return 'كلمة السر لازم ما تكون حرف مكرّر';
+  if (username && p.toLowerCase().includes(String(username).toLowerCase())) {
+    return 'كلمة السر لازم ما تحتوي على اسم المستخدم';
+  }
   return null;
 }
 

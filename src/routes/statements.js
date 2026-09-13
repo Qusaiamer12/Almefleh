@@ -31,24 +31,26 @@ router.get('/', asyncHandler(async (req, res) => {
   const period = resolvePeriod(req.query);
   const { rows } = await db.query(
     `SELECT b.*,
-            COALESCE((SELECT SUM(v.debt_delta) FROM v_transactions v
-                      WHERE v.entity_id = b.entity_id AND v.occurred_at < $1), 0) AS opening_balance,
-            COALESCE((SELECT SUM(v.debt_delta) FROM v_transactions v
+            ROUND(COALESCE((SELECT SUM(v.debt_delta) FROM v_transactions v
+                      WHERE v.entity_id = b.entity_id AND v.occurred_at < $1), 0), 2) AS opening_balance,
+            ROUND(COALESCE((SELECT SUM(v.debt_delta) FROM v_transactions v
                       WHERE v.entity_id = b.entity_id
-                        AND v.occurred_at >= $1 AND v.occurred_at < $2), 0) AS period_change
+                        AND v.occurred_at >= $1 AND v.occurred_at < $2), 0), 2) AS period_change
      FROM v_balances b
      WHERE b.type = 'customer'
      ORDER BY b.entity_name`,
     [period.from, period.to],
   );
+  // التوتالات بتنحسب بـ NUMERIC داخل القاعدة، مش بجمع أرقام JS عشرية
+  const { rows: totals } = await db.query('SELECT * FROM v_customer_totals');
 
   res.json({
     period,
     customers: rows,
     totals: {
-      balance: Number(rows.reduce((s, r) => s + Number(r.balance), 0).toFixed(2)),
-      total_withdrawn: Number(rows.reduce((s, r) => s + Number(r.total_withdrawn), 0).toFixed(2)),
-      total_paid: Number(rows.reduce((s, r) => s + Number(r.total_paid), 0).toFixed(2)),
+      balance: totals[0].total_balance,
+      total_withdrawn: totals[0].total_withdrawn,
+      total_paid: totals[0].total_paid,
     },
   });
 }));
@@ -64,48 +66,39 @@ router.get('/:entityId', asyncHandler(async (req, res) => {
 
   const period = resolvePeriod(req.query);
 
-  const { rows: openingRows } = await db.query(
-    `SELECT COALESCE(SUM(debt_delta), 0) AS opening
-     FROM v_transactions WHERE entity_id = $1 AND occurred_at < $2`,
-    [entityId, period.from],
+  // كل الأرقام المالية بتنحسب بـ NUMERIC جوّا القاعدة (دقّة تامة، بدون فروقات تراكمية)
+  const { rows: summaryRows } = await db.query(
+    'SELECT * FROM entity_period_summary($1, $2, $3)',
+    [entityId, period.from, period.to],
   );
-  const opening = Number(openingRows[0].opening);
+  const summary = summaryRows[0];
 
+  // الرصيد الجاري سطر بسطر بدالة نافذة - كمان بـ NUMERIC
   const { rows: lines } = await db.query(
-    `SELECT v.*, u.display_name AS created_by_name
+    `SELECT v.*, u.display_name AS created_by_name,
+            ROUND($4::numeric + SUM(v.debt_delta) OVER (
+              ORDER BY v.occurred_at, v.id ROWS UNBOUNDED PRECEDING
+            ), 2) AS running_balance
      FROM v_transactions v LEFT JOIN users u ON u.id = v.created_by
      WHERE v.entity_id = $1 AND v.occurred_at >= $2 AND v.occurred_at < $3
      ORDER BY v.occurred_at, v.id`,
-    [entityId, period.from, period.to],
+    [entityId, period.from, period.to, summary.opening_balance],
   );
-
-  // رصيد جاري سطر بسطر
-  let running = opening;
-  const rows = lines.map((l) => {
-    running = Number((running + Number(l.debt_delta || 0)).toFixed(2));
-    return { ...l, kind_label: KIND_LABELS[l.kind], running_balance: running };
-  });
-
-  const totals = {
-    withdrawals: sum(rows, (r) => (r.kind === 'customer_out' ? Number(r.amount || 0) : 0)),
-    returns: sum(rows, (r) => (r.kind === 'customer_return' ? Number(r.amount || 0) : 0)),
-    payments: sum(rows, (r) => (r.kind === 'payment' ? Number(r.payment_amount || 0) : 0)),
-    pending_price_lines: rows.filter((r) => r.price_pending).length,
-  };
 
   res.json({
     entity,
     period,
-    opening_balance: Number(opening.toFixed(2)),
-    lines: rows,
-    totals,
-    closing_balance: Number(running.toFixed(2)),
+    opening_balance: summary.opening_balance,
+    lines: lines.map((l) => ({ ...l, kind_label: KIND_LABELS[l.kind] })),
+    totals: {
+      withdrawals: summary.withdrawals,
+      returns: summary.returns,
+      payments: summary.payments,
+      pending_price_lines: summary.pending_lines,
+    },
+    closing_balance: summary.closing_balance,
     financial: entity.has_financials,
   });
 }));
-
-function sum(rows, pick) {
-  return Number(rows.reduce((s, r) => s + pick(r), 0).toFixed(2));
-}
 
 module.exports = router;

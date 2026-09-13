@@ -6,6 +6,7 @@ const { requireAuth, requireRole, canSeeMoney, redactTransaction } = require('..
 const { logAudit, diffFields } = require('../lib/audit');
 const { notifyAll, notifyAdmins, TYPES } = require('../lib/notify');
 const { parseQuantity, parseAmount, formatQuantity } = require('../lib/quantity');
+const { validate } = require('../lib/validate');
 const dates = require('../lib/dates');
 const { resolvePeriod, hasPeriod } = require('../lib/period');
 
@@ -26,8 +27,12 @@ const KIND_LABELS = {
   operator_in: 'إدخال من المشغل',
 };
 
-/** التحقق من تطابق نوع الحركة مع الجهة، وتحضير القيم للحفظ */
-async function buildTransactionPayload(body, user) {
+/**
+ * التحقق من تطابق نوع الحركة مع الجهة، وتحضير القيم للحفظ.
+ * بتاخد `client` عشان القراءات (الجهة والصنف) تصير جوّا نفس الـ transaction
+ * تبع الكتابة - هيك ما بينفع صنف ينحذف أو يتعدّل بين الفحص والحفظ.
+ */
+async function buildTransactionPayload(client, body, user) {
   const kind = String(body?.kind || '');
   if (!ALL_KINDS.includes(kind)) {
     const e = new Error('نوع الحركة غير معروف'); e.status = 400; throw e;
@@ -36,7 +41,8 @@ async function buildTransactionPayload(body, user) {
   let entity = null;
   if (kind !== 'supply') {
     const entityId = Number(body?.entity_id);
-    const { rows } = await db.query('SELECT * FROM entities WHERE id = $1 AND active = TRUE', [entityId]);
+    const { rows } = await client.query(
+      'SELECT * FROM entities WHERE id = $1 AND active = TRUE', [entityId]);
     entity = rows[0];
     if (!entity) { const e = new Error('الجهة غير موجودة'); e.status = 400; throw e; }
 
@@ -69,7 +75,7 @@ async function buildTransactionPayload(body, user) {
     payload.method = method;
   } else {
     const itemId = Number(body?.item_id);
-    const { rows } = await db.query('SELECT * FROM items WHERE id = $1', [itemId]);
+    const { rows } = await client.query('SELECT * FROM items WHERE id = $1', [itemId]);
     const item = rows[0];
     if (!item) { const e = new Error('الصنف غير موجود'); e.status = 400; throw e; }
     const parsed = parseQuantity(body?.quantity, item.unit);
@@ -87,6 +93,24 @@ async function buildTransactionPayload(body, user) {
 
   return payload;
 }
+
+const TXN_SCHEMA = {
+  kind: { type: 'enum', values: ALL_KINDS, required: true, label: 'نوع الحركة' },
+  entity_id: { type: 'int', min: 1, label: 'الجهة' },
+  item_id: { type: 'int', min: 1, label: 'الصنف' },
+  quantity: { type: 'string', maxLength: 40, label: 'الكمية' },
+  payment_amount: { type: 'string', maxLength: 40, label: 'المبلغ' },
+  amount: { type: 'string', maxLength: 40, label: 'المبلغ' },
+  method: { type: 'enum', values: ['cash', 'bank', 'check'], label: 'طريقة الدفع' },
+  note: { type: 'string', maxLength: 500, label: 'الملاحظة' },
+  unit_price_override: { type: 'number', min: 0, max: 1e9, label: 'السعر الاستثنائي' },
+  occurred_at: { type: 'date', maxFutureDays: 1, label: 'تاريخ الحركة' },
+  // رمز فريد بترسله الواجهة مع كل محاولة تسجيل - بيمنع الازدواج
+  client_token: { type: 'string', minLength: 8, maxLength: 64,
+                  pattern: /^[A-Za-z0-9._-]+$/, label: 'رمز الطلب' },
+};
+
+const TXN_PATCH_SCHEMA = { ...TXN_SCHEMA, kind: { ...TXN_SCHEMA.kind, required: false } };
 
 /** فحص الستوك بعد الحركة + تنبيه إذا صار سالب */
 async function checkStock(client, itemId, user) {
@@ -161,24 +185,39 @@ router.get('/', asyncHandler(async (req, res) => {
 
 /** تسجيل حركة جديدة */
 router.post('/', requireRole('admin', 'recorder'), asyncHandler(async (req, res) => {
-  const payload = await buildTransactionPayload(req.body, req.user);
+  const input = validate(req.body, TXN_SCHEMA);
 
   // الوقت تلقائي؛ الأدمن بس بيقدر يحدّد تاريخ يدوي (لتصحيح حركة قديمة)
-  let occurredAt = new Date();
-  if (req.user.role === 'admin' && req.body?.occurred_at) {
-    occurredAt = new Date(req.body.occurred_at);
-    if (Number.isNaN(occurredAt.getTime())) return res.status(400).json({ error: 'تاريخ غير صالح' });
+  const occurredAt = (req.user.role === 'admin' && input.occurred_at) ? input.occurred_at : new Date();
+
+  // الطلب المكرّر بنفس الرمز بيرجّع الحركة الأصلية بدل ما يسجّل وحدة جديدة
+  if (input.client_token) {
+    const { rows: existing } = await db.query(
+      `SELECT * FROM v_transactions WHERE id = (
+         SELECT id FROM transactions
+         WHERE client_token = $1 AND deleted_at IS NULL LIMIT 1)`,
+      [input.client_token],
+    );
+    if (existing[0]) {
+      return res.status(200).json({
+        transaction: redactTransaction(
+          { ...existing[0], kind_label: KIND_LABELS[existing[0].kind] }, req.user),
+        warnings: [],
+        duplicate: true,
+      });
+    }
   }
 
   const result = await db.withTransaction(async (client) => {
+    const payload = await buildTransactionPayload(client, input, req.user);
     const { rows } = await client.query(
       `INSERT INTO transactions
          (kind, entity_id, item_id, quantity, quantity_input, unit_price_override,
-          payment_amount, method, note, occurred_at, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+          payment_amount, method, note, occurred_at, created_by, client_token)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
       [payload.kind, payload.entity_id, payload.item_id, payload.quantity, payload.quantity_input,
        payload.unit_price_override, payload.payment_amount, payload.method, payload.note,
-       occurredAt, req.user.id],
+       occurredAt, req.user.id, input.client_token || null],
     );
     const txn = rows[0];
 
@@ -215,44 +254,56 @@ router.post('/', requireRole('admin', 'recorder'), asyncHandler(async (req, res)
     }
 
     return { full, warning };
+  }).catch(async (err) => {
+    // طلبان بنفس الرمز وصلوا بنفس اللحظة: الفهرس الفريد رفض التاني
+    if (err.code === '23505' && input.client_token) {
+      const { rows } = await db.query(
+        `SELECT * FROM v_transactions WHERE id = (
+           SELECT id FROM transactions WHERE client_token = $1 AND deleted_at IS NULL LIMIT 1)`,
+        [input.client_token],
+      );
+      if (rows[0]) return { full: rows[0], warning: null, duplicate: true };
+    }
+    throw err;
   });
 
-  res.status(201).json({
+  res.status(result.duplicate ? 200 : 201).json({
     transaction: redactTransaction({ ...result.full, kind_label: KIND_LABELS[result.full.kind] }, req.user),
     warnings: result.warning ? [result.warning] : [],
+    ...(result.duplicate ? { duplicate: true } : {}),
   });
 }));
 
 /** تعديل حركة - بيعيد حساب كل التوتالات تلقائياً */
 router.patch('/:id', requireRole('admin', 'recorder'), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
-  const { rows: existing } = await db.query(
-    'SELECT * FROM transactions WHERE id = $1 AND deleted_at IS NULL', [id],
-  );
-  const before = existing[0];
-  if (!before) return res.status(404).json({ error: 'الحركة غير موجودة' });
-
-  // دمج القيم الجديدة فوق القديمة
-  const merged = {
-    kind: req.body?.kind ?? before.kind,
-    entity_id: req.body?.entity_id !== undefined ? req.body.entity_id : before.entity_id,
-    item_id: req.body?.item_id !== undefined ? req.body.item_id : before.item_id,
-    quantity: req.body?.quantity !== undefined ? req.body.quantity : before.quantity_input || before.quantity,
-    payment_amount: req.body?.payment_amount !== undefined ? req.body.payment_amount : before.payment_amount,
-    method: req.body?.method ?? before.method,
-    note: req.body?.note !== undefined ? req.body.note : before.note,
-    unit_price_override: req.body?.unit_price_override !== undefined
-      ? req.body.unit_price_override : before.unit_price_override,
-  };
-  const payload = await buildTransactionPayload(merged, req.user);
-
-  let occurredAt = before.occurred_at;
-  if (req.user.role === 'admin' && req.body?.occurred_at) {
-    occurredAt = new Date(req.body.occurred_at);
-    if (Number.isNaN(occurredAt.getTime())) return res.status(400).json({ error: 'تاريخ غير صالح' });
-  }
+  if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'رقم حركة غير صالح' });
+  const input = validate(req.body, TXN_PATCH_SCHEMA);
 
   const result = await db.withTransaction(async (client) => {
+    // قفل السطر: بيمنع تعديلين متزامنين على نفس الحركة من يدعسوا بعض
+    const { rows: existing } = await client.query(
+      'SELECT * FROM transactions WHERE id = $1 AND deleted_at IS NULL FOR UPDATE', [id],
+    );
+    const before = existing[0];
+    if (!before) { const e = new Error('الحركة غير موجودة'); e.status = 404; throw e; }
+
+    // دمج القيم الجديدة فوق القديمة
+    const merged = {
+      kind: input.kind ?? before.kind,
+      entity_id: input.entity_id !== undefined ? input.entity_id : before.entity_id,
+      item_id: input.item_id !== undefined ? input.item_id : before.item_id,
+      quantity: input.quantity !== undefined ? input.quantity : (before.quantity_input || before.quantity),
+      payment_amount: input.payment_amount !== undefined ? input.payment_amount : before.payment_amount,
+      method: input.method ?? before.method,
+      note: input.note !== undefined ? input.note : before.note,
+      unit_price_override: input.unit_price_override !== undefined
+        ? input.unit_price_override : before.unit_price_override,
+    };
+    const payload = await buildTransactionPayload(client, merged, req.user);
+    const occurredAt = (req.user.role === 'admin' && input.occurred_at)
+      ? input.occurred_at : before.occurred_at;
+
     const { rows } = await client.query(
       `UPDATE transactions SET kind=$1, entity_id=$2, item_id=$3, quantity=$4, quantity_input=$5,
               unit_price_override=$6, payment_amount=$7, method=$8, note=$9, occurred_at=$10,
@@ -269,12 +320,14 @@ router.patch('/:id', requireRole('admin', 'recorder'), asyncHandler(async (req, 
       before, after, summary: `تعديل حركة #${id} (${KIND_LABELS[before.kind]})`, ip: req.ip,
     });
 
-    await notifyAdmins(client, {
-      type: TYPES.TXN_EDITED,
-      title: 'تعديل حركة',
-      body: `${req.user.display_name} عدّل الحركة #${id}`,
-      data: { transaction_id: id },
-    });
+    if (req.user.role !== 'admin') {
+      await notifyAdmins(client, {
+        type: TYPES.TXN_EDITED,
+        title: 'تعديل حركة',
+        body: `${req.user.display_name} عدّل الحركة #${id}`,
+        data: { transaction_id: id },
+      });
+    }
 
     const warning = await checkStock(client, after.item_id, req.user);
     const { rows: view } = await client.query('SELECT * FROM v_transactions WHERE id = $1', [id]);
@@ -291,15 +344,21 @@ router.patch('/:id', requireRole('admin', 'recorder'), asyncHandler(async (req, 
 /** حذف حركة (حذف ناعم) - التوتالات بترجع تلقائياً */
 router.delete('/:id', requireRole('admin', 'recorder'), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
-  const { rows: existing } = await db.query(
-    'SELECT * FROM v_transactions WHERE id = $1', [id],
-  );
-  const before = existing[0];
-  if (!before) return res.status(404).json({ error: 'الحركة غير موجودة' });
+  if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'رقم حركة غير صالح' });
 
   await db.withTransaction(async (client) => {
+    // قفل السطر أول، وبعدين اقرأ - بيمنع حذفين متزامنين لنفس الحركة
+    const { rows: locked } = await client.query(
+      'SELECT id FROM transactions WHERE id = $1 AND deleted_at IS NULL FOR UPDATE', [id],
+    );
+    if (!locked[0]) { const e = new Error('الحركة غير موجودة أو محذوفة أصلاً'); e.status = 404; throw e; }
+
+    const { rows: existing } = await client.query('SELECT * FROM v_transactions WHERE id = $1', [id]);
+    const before = existing[0];
+
     await client.query(
-      'UPDATE transactions SET deleted_at = now(), deleted_by = $1 WHERE id = $2', [req.user.id, id],
+      'UPDATE transactions SET deleted_at = now(), deleted_by = $1 WHERE id = $2 AND deleted_at IS NULL',
+      [req.user.id, id],
     );
     await logAudit(client, {
       user: req.user, action: 'delete', table: 'transactions', recordId: id,
@@ -309,12 +368,14 @@ router.delete('/:id', requireRole('admin', 'recorder'), asyncHandler(async (req,
                `${before.amount ? ' - ' + before.amount : ''})`,
       ip: req.ip,
     });
-    await notifyAdmins(client, {
-      type: TYPES.TXN_EDITED,
-      title: 'حذف حركة',
-      body: `${req.user.display_name} حذف الحركة #${id}`,
-      data: { transaction_id: id },
-    });
+    if (req.user.role !== 'admin') {
+      await notifyAdmins(client, {
+        type: TYPES.TXN_EDITED,
+        title: 'حذف حركة',
+        body: `${req.user.display_name} حذف الحركة #${id}`,
+        data: { transaction_id: id },
+      });
+    }
   });
 
   res.json({ ok: true });

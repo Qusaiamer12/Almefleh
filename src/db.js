@@ -15,10 +15,53 @@ const pool = new Pool({
   connectionTimeoutMillis: 10000,
 });
 
-pool.on('error', (err) => console.error('[db] خطأ بالاتصال:', err.message));
+const log = require('./lib/logger');
+
+// خطأ بعميل خامل ما بيوقّف التطبيق - الـ pool بيستبدله لحاله
+pool.on('error', (err) => log.error('خطأ باتصال قاعدة البيانات', { error: err.message }));
+
+const SLOW_QUERY_MS = Number(process.env.SLOW_QUERY_MS || 500);
 
 async function query(text, params) {
-  return pool.query(text, params);
+  const started = process.hrtime.bigint();
+  try {
+    const result = await pool.query(text, params);
+    const ms = Number(process.hrtime.bigint() - started) / 1e6;
+    if (ms > SLOW_QUERY_MS) {
+      log.warn('استعلام بطيء', { ms: Math.round(ms), sql: text.replace(/\s+/g, ' ').slice(0, 160) });
+    }
+    return result;
+  } catch (err) {
+    log.error('فشل استعلام', {
+      error: err.message,
+      code: err.code,
+      sql: text.replace(/\s+/g, ' ').slice(0, 160),
+    });
+    throw err;
+  }
+}
+
+/**
+ * انتظار جاهزية قاعدة البيانات مع إعادة محاولة تصاعدية.
+ * Supabase بالخطة المجانية ممكن تاخد وقت تصحى، وRender بتشغّل الخدمة قبلها.
+ */
+async function waitForDatabase({ attempts = 8, baseDelayMs = 500 } = {}) {
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      await pool.query('SELECT 1');
+      if (attempt > 1) log.info('قاعدة البيانات جاهزة', { attempt });
+      return true;
+    } catch (err) {
+      if (attempt === attempts) {
+        log.error('ما قدرنا نوصل لقاعدة البيانات', { attempts, error: err.message });
+        throw err;
+      }
+      const delay = Math.min(baseDelayMs * 2 ** (attempt - 1), 10000);
+      log.warn('قاعدة البيانات مش جاهزة - إعادة محاولة', { attempt, delay_ms: delay });
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  return false;
 }
 
 /** تنفيذ مجموعة عمليات داخل transaction واحدة */
@@ -37,4 +80,4 @@ async function withTransaction(fn) {
   }
 }
 
-module.exports = { pool, query, withTransaction };
+module.exports = { pool, query, withTransaction, waitForDatabase };

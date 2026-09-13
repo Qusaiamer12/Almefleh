@@ -1,25 +1,87 @@
 'use strict';
 const config = require('./config');
-const app = require('./app');
+const log = require('./lib/logger');
 const db = require('./db');
 
-const server = app.listen(config.port, () => {
-  console.log(`[${config.appName}] شغّال على المنفذ ${config.port} (${config.env})`);
-  console.log(`[timezone] ${config.timezone} | بداية الأسبوع: السبت`);
-});
+/**
+ * بدء التشغيل:
+ *   ١) ننتظر قاعدة البيانات تجهز (مع إعادة محاولة)
+ *   ٢) نتأكد إنه المخطّط محدّث (ترحيلات مطبّقة)
+ *   ٣) نشغّل الخدمة والمهام الدورية
+ */
+async function start() {
+  await db.waitForDatabase();
 
-// النسخ الاحتياطي الدوري
-if (config.backup.enabled) {
-  const { scheduleBackups } = require('./jobs/backup');
-  scheduleBackups();
-}
+  const { pendingCount } = require('./lib/migrations');
+  const pending = await pendingCount(db);
+  if (pending > 0) {
+    if (String(process.env.AUTO_MIGRATE || 'false').toLowerCase() === 'true') {
+      log.warn('في ترحيلات معلّقة - جاري تطبيقها', { pending });
+      const { migrate } = require('./lib/migrations');
+      await migrate(db, { log: (m) => log.info(m.trim()) });
+    } else {
+      log.error('في ترحيلات معلّقة - شغّل npm run migrate قبل التشغيل', { pending });
+      process.exit(1);
+    }
+  }
 
-async function shutdown(signal) {
-  console.log(`\n[${signal}] جاري الإغلاق...`);
-  server.close(() => {
-    db.pool.end().then(() => process.exit(0)).catch(() => process.exit(1));
+  const app = require('./app');
+  const server = app.listen(config.port, () => {
+    log.info(`${config.appName} شغّال`, {
+      port: config.port, env: config.env, timezone: config.timezone,
+    });
   });
-  setTimeout(() => process.exit(1), 10000).unref();
+  server.headersTimeout = 20000;
+  server.requestTimeout = 30000;
+
+  if (config.backup.enabled) {
+    require('./jobs/backup').scheduleBackups();
+  }
+  require('./jobs/maintenance').scheduleMaintenance();
+
+  setupShutdown(server);
+  return server;
 }
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT', () => shutdown('SIGINT'));
+
+/** إغلاق مرتّب: نوقف استقبال الطلبات، نخلّص الشغل الجاري، وبعدين نسكّر القاعدة */
+function setupShutdown(server) {
+  let shuttingDown = false;
+
+  const shutdown = async (signal) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    log.info('جاري الإغلاق', { signal });
+
+    const forceExit = setTimeout(() => {
+      log.error('الإغلاق تأخّر - خروج إجباري');
+      process.exit(1);
+    }, 15000);
+    forceExit.unref();
+
+    server.close(async () => {
+      try { await db.pool.end(); } catch { /* انقفل أصلاً */ }
+      log.info('انقفل بأمان');
+      process.exit(0);
+    });
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+
+  // خطأ غير ملتقط: نسجّله ونخرج بشكل مرتّب (Render بتعيد التشغيل)
+  process.on('uncaughtException', (err) => {
+    log.error('خطأ غير ملتقط', { error: err.message, stack: err.stack });
+    shutdown('uncaughtException');
+  });
+  process.on('unhandledRejection', (reason) => {
+    log.error('وعد مرفوض بدون معالجة', {
+      error: reason instanceof Error ? reason.message : String(reason),
+      stack: reason instanceof Error ? reason.stack : undefined,
+    });
+  });
+}
+
+start().catch((err) => {
+  log.error('فشل بدء التشغيل', { error: err.message, stack: err.stack });
+  process.exit(1);
+});

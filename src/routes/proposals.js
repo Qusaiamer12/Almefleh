@@ -4,6 +4,7 @@ const db = require('../db');
 const { asyncHandler } = require('../middleware/errors');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { logAudit } = require('../lib/audit');
+const { validate } = require('../lib/validate');
 
 const router = express.Router();
 // اقتراحات تعديل الأسعار: قصي بس
@@ -24,30 +25,43 @@ router.get('/', asyncHandler(async (req, res) => {
 }));
 
 /** الموافقة: بينحفظ سعر جديد للصنف الجاهز بتاريخ سريان */
+const ACCEPT_SCHEMA = {
+  price: { type: 'number', min: 0, max: 1e9, label: 'السعر' },
+  effective_from: { type: 'date', label: 'تاريخ السريان' },
+};
+
 router.post('/:id/accept', asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
-  const { rows: found } = await db.query('SELECT * FROM price_proposals WHERE id = $1', [id]);
-  const proposal = found[0];
-  if (!proposal) return res.status(404).json({ error: 'الاقتراح غير موجود' });
-  if (proposal.status !== 'pending') return res.status(400).json({ error: 'تم البتّ بهالاقتراح مسبقاً' });
-
-  // قصي بيقدر يعدّل السعر وتاريخ السريان قبل الموافقة
-  const price = req.body?.price != null ? Number(req.body.price) : Number(proposal.suggested_price);
-  if (!Number.isFinite(price) || price < 0) return res.status(400).json({ error: 'سعر غير صالح' });
-  const effectiveFrom = req.body?.effective_from ? new Date(req.body.effective_from) : new Date(proposal.effective_from);
-  if (Number.isNaN(effectiveFrom.getTime())) return res.status(400).json({ error: 'تاريخ سريان غير صالح' });
+  if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'رقم اقتراح غير صالح' });
+  const input = validate(req.body, ACCEPT_SCHEMA);
 
   await db.withTransaction(async (client) => {
+    // تحديث ذرّي: أول واحد بيمرّ بس. الطلب المكرّر بيلاقي الحالة مش pending.
+    const { rows: claimed } = await client.query(
+      `UPDATE price_proposals SET status = 'accepted', decided_by = $1, decided_at = now()
+       WHERE id = $2 AND status = 'pending'
+       RETURNING *`,
+      [req.user.id, id],
+    );
+    const proposal = claimed[0];
+    if (!proposal) {
+      const e = new Error('الاقتراح غير موجود أو تم البتّ فيه مسبقاً');
+      e.status = 409;
+      throw e;
+    }
+
+    const price = input.price != null ? input.price : Number(proposal.suggested_price);
+    if (!Number.isFinite(price) || price < 0) {
+      const e = new Error('ما في سعر مقترح صالح - حدّد السعر يدوي'); e.status = 400; throw e;
+    }
+    const effectiveFrom = input.effective_from || new Date(proposal.effective_from);
+
     await client.query(
       `INSERT INTO item_prices (item_id, price, effective_from, note, created_by)
        VALUES ($1,$2,$3,$4,$5)
        ON CONFLICT (item_id, effective_from)
        DO UPDATE SET price = EXCLUDED.price, note = EXCLUDED.note`,
       [proposal.parent_item_id, price, effectiveFrom, 'تعديل تلقائي بعد تغيّر سعر المقادير', req.user.id],
-    );
-    await client.query(
-      `UPDATE price_proposals SET status = 'accepted', decided_by = $1, decided_at = now() WHERE id = $2`,
-      [req.user.id, id],
     );
     await logAudit(client, {
       user: req.user, action: 'update', table: 'price_proposals', recordId: id,
@@ -57,7 +71,7 @@ router.post('/:id/accept', asyncHandler(async (req, res) => {
     });
   });
 
-  res.json({ ok: true, price, effective_from: effectiveFrom });
+  res.json({ ok: true });
 }));
 
 router.post('/:id/reject', asyncHandler(async (req, res) => {

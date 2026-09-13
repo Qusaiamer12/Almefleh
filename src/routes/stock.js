@@ -12,7 +12,8 @@ router.use(requireAuth, requireRole('admin', 'viewer'));
 router.get('/', asyncHandler(async (req, res) => {
   const includeInactive = String(req.query.include_inactive || '') === 'true';
   const { rows } = await db.query(
-    `SELECT s.*, 
+    `SELECT s.*,
+            ROUND(s.quantity * s.current_price, 2) AS value_rounded,
             EXISTS (SELECT 1 FROM item_components ic WHERE ic.parent_item_id = s.item_id) AS has_recipe
      FROM v_stock s
      ${includeInactive ? '' : 'WHERE s.active = TRUE'}
@@ -23,18 +24,13 @@ router.get('/', asyncHandler(async (req, res) => {
     ...r,
     negative: Number(r.quantity) < 0,
     needs_price: r.current_price == null,
-    value: r.current_price == null ? null : Number((Number(r.quantity) * Number(r.current_price)).toFixed(2)),
+    value: r.value_rounded,
   }));
 
-  res.json({
-    items,
-    summary: {
-      total_items: items.length,
-      negative_count: items.filter((i) => i.negative).length,
-      missing_price_count: items.filter((i) => i.needs_price).length,
-      total_value: Number(items.reduce((sum, i) => sum + (i.value || 0), 0).toFixed(2)),
-    },
-  });
+  // الملخّص بيجي محسوب بـ NUMERIC من القاعدة
+  const { rows: summaryRows } = await db.query('SELECT * FROM v_stock_summary');
+
+  res.json({ items, summary: summaryRows[0] });
 }));
 
 /** تفاصيل صنف واحد: رصيد + سعر + مقادير + آخر الحركات */

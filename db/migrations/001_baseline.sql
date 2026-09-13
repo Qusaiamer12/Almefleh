@@ -7,7 +7,6 @@
 --   كل التوتالات رجوعاً وللأمام بدون أي إعادة حساب يدوية.
 -- ==========================================================================
 
-BEGIN;
 
 -- ---------- أنواع ----------
 DO $$ BEGIN
@@ -315,4 +314,3 @@ FROM entities e
 LEFT JOIN v_transactions v ON v.entity_id = e.id
 GROUP BY e.id, e.name, e.type, e.has_financials;
 
-COMMIT;

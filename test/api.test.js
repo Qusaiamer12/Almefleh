@@ -22,11 +22,10 @@ process.env.BACKUP_ENABLED = 'false';
 process.env.SEED_ADMIN_PASSWORD = 'Admin@1234';
 process.env.SEED_DEFAULT_PASSWORD = 'Pass@1234';
 
-const fs = require('fs');
-const path = require('path');
 const db = require('../src/db');
 const app = require('../src/app');
 const { seed } = require('../scripts/seed');
+const { migrate } = require('../src/lib/migrations');
 
 let server;
 let base;
@@ -51,9 +50,9 @@ async function call(user, method, url, body) {
 const login = (user, username, password) => call(user, 'POST', '/api/auth/login', { username, password });
 
 test.before(async () => {
-  // قاعدة نظيفة
+  // قاعدة نظيفة + كل الترحيلات
   await db.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
-  await db.query(fs.readFileSync(path.join(__dirname, '..', 'db', 'schema.sql'), 'utf8'));
+  await migrate(db, { log: () => {} });
   await seed({ demo: false });
 
   server = app.listen(0);

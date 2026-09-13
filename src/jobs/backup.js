@@ -1,33 +1,61 @@
 'use strict';
 const fs = require('fs/promises');
 const path = require('path');
+const crypto = require('crypto');
 const cron = require('node-cron');
 const db = require('../db');
 const config = require('../config');
 
+// الترتيب مهم: الجدول اللي بيعتمد على غيره بيجي بعده (عشان الاسترجاع يمشي)
 const TABLES = [
   'entities', 'users', 'items', 'item_prices', 'item_components',
   'transactions', 'price_proposals', 'customer_requests', 'notifications',
-  'audit_log', 'settings',
+  'audit_log', 'login_attempts', 'settings', 'schema_migrations',
 ];
 
-/** سحب كل البيانات كـ JSON واحد */
+/**
+ * سحب كل البيانات كـ JSON واحد.
+ * بتنقرأ كلها من نفس اللقطة (REPEATABLE READ) عشان النسخة تكون متسقة
+ * حتى لو حدا سجّل حركة وقت أخذ النسخة.
+ */
 async function dumpAll() {
   const data = {};
-  for (const table of TABLES) {
-    const { rows } = await db.query(`SELECT * FROM ${table} ORDER BY 1`);
-    data[table] = rows;
-  }
-  return {
-    meta: {
-      app: config.appName,
-      generated_at: new Date().toISOString(),
-      timezone: config.timezone,
-      version: 1,
-      row_counts: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, v.length])),
-    },
-    data,
+  await db.withTransaction(async (client) => {
+    await client.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    for (const table of TABLES) {
+      const { rows } = await client.query(`SELECT * FROM ${table} ORDER BY 1`);
+      data[table] = rows;
+    }
+  });
+
+  const meta = {
+    app: config.appName,
+    generated_at: new Date().toISOString(),
+    timezone: config.timezone,
+    format_version: 2,
+    tables: TABLES,
+    row_counts: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, v.length])),
   };
+  // بصمة على البيانات: أي تلف بالملف بينكشف وقت الاسترجاع
+  meta.checksum = crypto.createHash('sha256').update(JSON.stringify(data)).digest('hex');
+  return { meta, data };
+}
+
+/** التحقق من سلامة ملف نسخة احتياطية */
+function verifyDump(dump) {
+  const problems = [];
+  if (!dump || typeof dump !== 'object') return ['الملف مش بصيغة نسخة احتياطية'];
+  if (!dump.meta || !dump.data) problems.push('الملف ناقص meta أو data');
+  if (dump.meta?.checksum) {
+    const actual = crypto.createHash('sha256').update(JSON.stringify(dump.data)).digest('hex');
+    if (actual !== dump.meta.checksum) problems.push('البصمة ما بتطابق - الملف تالف أو متعدّل');
+  }
+  for (const [table, count] of Object.entries(dump.meta?.row_counts || {})) {
+    const actual = dump.data?.[table]?.length;
+    if (actual !== count) problems.push(`عدد سطور ${table} ما بيطابق (${actual} بدل ${count})`);
+  }
+  if ((dump.data?.users?.length || 0) === 0) problems.push('ما في مستخدمين بالنسخة - شكلها ناقصة');
+  return problems;
 }
 
 /** الحصول على access token من refresh token تاع جوجل درايف */
@@ -104,6 +132,14 @@ async function runBackup() {
   await fs.mkdir(dir, { recursive: true });
   const localPath = path.join(dir, fileName);
   await fs.writeFile(localPath, content, 'utf8');
+
+  // إعادة قراءة الملف والتحقق منه - نسخة ما بتنقرأ مش نسخة
+  const written = JSON.parse(await fs.readFile(localPath, 'utf8'));
+  const problems = verifyDump(written);
+  if (problems.length) {
+    throw new Error(`النسخة الاحتياطية طلعت تالفة: ${problems.join('، ')}`);
+  }
+
   await pruneLocal(dir);
 
   let drive = { uploaded: false, reason: 'مش مفعّل' };
@@ -118,6 +154,8 @@ async function runBackup() {
     file: fileName,
     local_path: localPath,
     size_bytes: Buffer.byteLength(content),
+    checksum: dump.meta.checksum,
+    verified: true,
     rows: dump.meta.row_counts,
     drive,
     duration_ms: Date.now() - started,
@@ -145,4 +183,4 @@ function scheduleBackups() {
   console.log(`[backup] مجدول: ${config.backup.cron} (${config.timezone})`);
 }
 
-module.exports = { runBackup, scheduleBackups, dumpAll };
+module.exports = { runBackup, scheduleBackups, dumpAll, verifyDump, TABLES };

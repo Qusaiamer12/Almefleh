@@ -5,6 +5,30 @@ const { asyncHandler } = require('../middleware/errors');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { hashPassword, encryptSecret, decryptSecret, validatePassword } = require('../lib/crypto');
 const { logAudit, diffFields } = require('../lib/audit');
+const { validate } = require('../lib/validate');
+
+const ROLES = ['admin', 'recorder', 'viewer', 'customer'];
+
+const NEW_USER_SCHEMA = {
+  username: { type: 'string', required: true, minLength: 3, maxLength: 120,
+              pattern: /^[A-Za-z0-9._-]+$/, label: 'اسم المستخدم' },
+  display_name: { type: 'string', required: true, minLength: 2, maxLength: 120, label: 'الاسم' },
+  role: { type: 'enum', values: ROLES, required: true, label: 'الصلاحية' },
+  password: { type: 'string', required: true, maxLength: 200, label: 'كلمة السر' },
+  entity_id: { type: 'int', min: 1, label: 'الجهة' },
+  notifications_on: { type: 'boolean', default: true, label: 'التنبيهات' },
+};
+
+const PATCH_USER_SCHEMA = {
+  username: { type: 'string', minLength: 3, maxLength: 120,
+              pattern: /^[A-Za-z0-9._-]+$/, label: 'اسم المستخدم' },
+  display_name: { type: 'string', minLength: 2, maxLength: 120, label: 'الاسم' },
+  role: { type: 'enum', values: ROLES, label: 'الصلاحية' },
+  password: { type: 'string', maxLength: 200, label: 'كلمة السر' },
+  entity_id: { type: 'int', min: 1, label: 'الجهة' },
+  notifications_on: { type: 'boolean', label: 'التنبيهات' },
+  active: { type: 'boolean', label: 'الحالة' },
+};
 
 const router = express.Router();
 router.use(requireAuth);
@@ -37,22 +61,17 @@ router.get('/', requireRole('admin'), asyncHandler(async (req, res) => {
 }));
 
 router.post('/', requireRole('admin'), asyncHandler(async (req, res) => {
-  const username = String(req.body?.username || '').trim();
-  const displayName = String(req.body?.display_name || '').trim();
-  const role = String(req.body?.role || '');
-  const password = String(req.body?.password || '');
-  const entityId = req.body?.entity_id ? Number(req.body.entity_id) : null;
+  const input = validate(req.body, NEW_USER_SCHEMA);
+  const { username, display_name: displayName, role, password } = input;
+  const entityId = input.entity_id || null;
 
-  if (!username || !displayName || !role) {
-    return res.status(400).json({ error: 'اليوزر والاسم والصلاحية مطلوبين' });
-  }
-  if (!['admin', 'recorder', 'viewer', 'customer'].includes(role)) {
-    return res.status(400).json({ error: 'صلاحية غير معروفة' });
-  }
   if (role === 'customer' && !entityId) {
     return res.status(400).json({ error: 'حساب الزبون لازم يكون مربوط بجهة' });
   }
-  const bad = validatePassword(password);
+  if (role !== 'customer' && entityId) {
+    return res.status(400).json({ error: 'الجهة بتنربط بحسابات الزباين بس' });
+  }
+  const bad = validatePassword(password, { username });
   if (bad) return res.status(400).json({ error: bad });
 
   const { rows } = await db.query(
@@ -61,7 +80,7 @@ router.post('/', requireRole('admin'), asyncHandler(async (req, res) => {
      VALUES ($1,$2,$3,$4,$5,$6,$7)
      RETURNING id, username, display_name, role, entity_id, active, notifications_on`,
     [username, displayName, role, hashPassword(password), encryptSecret(password), entityId,
-     req.body?.notifications_on !== false],
+     input.notifications_on !== false],
   );
 
   await logAudit(db, {
@@ -77,28 +96,34 @@ router.patch('/:id', requireRole('admin'), asyncHandler(async (req, res) => {
   const before = existing[0];
   if (!before) return res.status(404).json({ error: 'الحساب غير موجود' });
 
+  const input = validate(req.body, PATCH_USER_SCHEMA);
   const updates = [];
   const params = [];
   const push = (sql, value) => { params.push(value); updates.push(`${sql} = $${params.length}`); };
 
-  if (req.body?.username != null) push('username', String(req.body.username).trim());
-  if (req.body?.display_name != null) push('display_name', String(req.body.display_name).trim());
-  if (req.body?.role != null) push('role', String(req.body.role));
-  if (req.body?.entity_id !== undefined) push('entity_id', req.body.entity_id ? Number(req.body.entity_id) : null);
-  if (req.body?.active != null) push('active', !!req.body.active);
-  if (req.body?.notifications_on != null) push('notifications_on', !!req.body.notifications_on);
+  if (input.username != null) push('username', input.username);
+  if (input.display_name != null) push('display_name', input.display_name);
+  if (input.role != null) push('role', input.role);
+  if ('entity_id' in input) push('entity_id', input.entity_id || null);
+  if (input.active != null) push('active', input.active);
+  if (input.notifications_on != null) push('notifications_on', input.notifications_on);
 
-  if (req.body?.password) {
-    const bad = validatePassword(req.body.password);
+  if (input.password) {
+    const bad = validatePassword(input.password, { username: input.username || before.username });
     if (bad) return res.status(400).json({ error: bad });
-    push('password_hash', hashPassword(String(req.body.password)));
-    push('password_enc', encryptSecret(String(req.body.password)));
+    push('password_hash', hashPassword(input.password));
+    push('password_enc', encryptSecret(input.password));
   }
+
+  // تغيير اليوزر أو كلمة السر بينهي كل جلسات هذا الحساب المفتوحة
+  if (input.password || input.username) updates.push('credentials_changed_at = now()');
+  // إيقاف الحساب بينهي جلساته كمان
+  if (input.active === false) updates.push('credentials_changed_at = now()');
 
   if (updates.length === 0) return res.status(400).json({ error: 'ما في شي للتعديل' });
 
   // منع قفل النظام: لازم يضل أدمن واحد فعّال على الأقل
-  if ((req.body?.active === false || (req.body?.role && req.body.role !== 'admin')) && before.role === 'admin') {
+  if ((input.active === false || (input.role && input.role !== 'admin')) && before.role === 'admin') {
     const { rows: admins } = await db.query(
       "SELECT COUNT(*)::int AS c FROM users WHERE role = 'admin' AND active = TRUE AND id <> $1", [id],
     );
@@ -118,10 +143,28 @@ router.patch('/:id', requireRole('admin'), asyncHandler(async (req, res) => {
     user: req.user, action: 'update', table: 'users', recordId: id,
     before: { ...before, password_hash: '***', password_enc: '***' },
     after: rows[0],
-    summary: `تعديل حساب: ${before.display_name}${req.body?.password ? ' (تغيير كلمة السر)' : ''}`,
+    summary: `تعديل حساب: ${before.display_name}${input.password ? ' (تغيير كلمة السر)' : ''}`,
     ip: req.ip,
   });
   res.json({ user: rows[0], changes: diffFields(before, rows[0]) });
+}));
+
+/** فك قفل حساب انقفل بسبب محاولات دخول فاشلة */
+router.post('/:id/unlock', requireRole('admin'), asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  const { rows } = await db.query(
+    'UPDATE users SET locked_until = NULL WHERE id = $1 RETURNING id, display_name', [id],
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'الحساب غير موجود' });
+  await db.query(
+    `INSERT INTO login_attempts (username, ip, success)
+     SELECT username, $2, TRUE FROM users WHERE id = $1`, [id, req.ip],
+  );
+  await logAudit(db, {
+    user: req.user, action: 'update', table: 'users', recordId: id,
+    summary: `فك قفل حساب: ${rows[0].display_name}`, ip: req.ip,
+  });
+  res.json({ ok: true });
 }));
 
 module.exports = router;
