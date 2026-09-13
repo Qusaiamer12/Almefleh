@@ -372,6 +372,37 @@ test('ما بينفع يضل النظام بلا أدمن فعّال', async () 
   assert.strictEqual(res.status, 400);
 });
 
+test('الشعار: رابط واحد بيقدّم svg افتراضياً و png إذا انحطّ', async () => {
+  const fs = require('fs');
+  const path = require('path');
+  const assetsDir = path.join(__dirname, '..', 'public', 'assets');
+  const pngPath = path.join(assetsDir, 'logo.png');
+
+  // الوضع الافتراضي: الرسمة المتجهة
+  const svg = await fetch(`${base}/assets/logo`);
+  assert.strictEqual(svg.status, 200);
+  assert.match(svg.headers.get('content-type'), /svg/);
+
+  // بعد ما ينحط PNG: نفس الرابط بيقدّمه بدون إعادة تشغيل
+  // (أصغر PNG صالح - بكسل شفاف واحد)
+  const onePixelPng = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+    'base64',
+  );
+  fs.writeFileSync(pngPath, onePixelPng);
+  try {
+    const png = await fetch(`${base}/assets/logo`);
+    assert.strictEqual(png.status, 200);
+    assert.match(png.headers.get('content-type'), /png/);
+  } finally {
+    fs.unlinkSync(pngPath);
+  }
+
+  // وبعد ما ينشال بيرجع للرسمة المتجهة
+  const back = await fetch(`${base}/assets/logo`);
+  assert.match(back.headers.get('content-type'), /svg/);
+});
+
 test('طلب الزبون بيوصل الأدمن كتنبيه', async () => {
   const res = await call('blal', 'POST', '/api/requests', { body: 'بدي كشف حساب الشهر' });
   assert.strictEqual(res.status, 201);

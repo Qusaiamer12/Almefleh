@@ -1,5 +1,5 @@
 // أدوات بناء الواجهة
-export const state = { user: null, currency: 'د.أ', logo: '/assets/logo.svg' };
+export const state = { user: null, currency: 'د.أ', logo: '/assets/logo' };
 
 /** إنشاء عنصر: h('div.card', {onclick}, ...children) - بتدعم #id و .class */
 const SPEC_RE = /^([a-zA-Z][a-zA-Z0-9-]*)?(#[\w-]+)?((?:\.[\w-]+)*)$/;

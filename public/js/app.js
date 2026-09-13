@@ -20,7 +20,7 @@ const PAGES = {
   customer: renderCustomer,
 };
 
-/** شعار المفلح - السيرفر بيحدّد المسار (logo.png إذا انحطّ، وإلا logo.svg) */
+/** شعار المفلح - رابط واحد ثابت والسيرفر بيختار الملف (png أو svg) */
 function logo(className = 'logo') {
   return h('img', { class: className, src: state.logo, alt: 'المفلح' });
 }
@@ -29,7 +29,6 @@ async function boot() {
   try {
     const config = await api.get('/api/config');
     state.currency = config.currency || 'د.أ';
-    state.logo = config.logo || '/assets/logo.svg';
     state.user = config.user;
   } catch {
     state.user = null;

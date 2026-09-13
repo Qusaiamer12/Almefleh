@@ -1,4 +1,5 @@
 'use strict';
+const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const cookieParser = require('cookie-parser');
@@ -97,22 +98,34 @@ app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/requests', require('./routes/requests'));
 app.use('/api/proposals', require('./routes/proposals'));
 
-// شعار المفلح: بيستعمل logo.png إذا انحطّ بالفولدر، وإلا الرسمة المتجهة
-const LOGO_PATH = require('fs').existsSync(path.join(__dirname, '..', 'public', 'assets', 'logo.png'))
-  ? '/assets/logo.png' : '/assets/logo.svg';
-
 app.get('/api/config', (req, res) => {
   res.json({
     app_name: config.appName,
     currency: config.currency,
     timezone: config.timezone,
-    logo: LOGO_PATH,
     user: req.user || null,
   });
 });
 
 // ملفات الواجهة
 const publicDir = path.join(__dirname, '..', 'public');
+
+/**
+ * شعار المفلح على رابط واحد ثابت: /assets/logo
+ *
+ * بيقدّم logo.png إذا انحطّ بالفولدر، وإلا الرسمة المتجهة logo.svg.
+ * الفحص بيصير مع كل طلب مش وقت الإقلاع، فحط الشعار ما بده إعادة تشغيل.
+ * ولأنه الرابط واحد، أيقونة التبويب وشعار الواجهة بيتغيّروا مع بعض.
+ */
+const LOGO_CANDIDATES = ['logo.png', 'logo.svg'];
+app.get('/assets/logo', (_req, res, next) => {
+  for (const name of LOGO_CANDIDATES) {
+    const file = path.join(publicDir, 'assets', name);
+    if (fs.existsSync(file)) return res.sendFile(file);
+  }
+  next();
+});
+
 app.use(express.static(publicDir, { extensions: ['html'] }));
 
 // صفحات الواجهة (تطبيق صفحة واحدة)

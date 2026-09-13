@@ -34,6 +34,18 @@ async function start() {
   server.headersTimeout = 20000;
   server.requestTimeout = 30000;
 
+  // فشل الربط بالمنفذ = فشل إقلاع، لازم يخرج بكود خطأ مش نجاح
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      log.error(`المنفذ ${config.port} مستعمل أصلاً - في نسخة تانية شغّالة؟`);
+    } else if (err.code === 'EACCES') {
+      log.error(`ما في صلاحية للمنفذ ${config.port}`);
+    } else {
+      log.error('فشل ربط المنفذ', { error: err.message, code: err.code });
+    }
+    process.exit(1);
+  });
+
   if (config.backup.enabled) {
     require('./jobs/backup').scheduleBackups();
   }
@@ -47,21 +59,21 @@ async function start() {
 function setupShutdown(server) {
   let shuttingDown = false;
 
-  const shutdown = async (signal) => {
+  const shutdown = async (signal, exitCode = 0) => {
     if (shuttingDown) return;
     shuttingDown = true;
     log.info('جاري الإغلاق', { signal });
 
     const forceExit = setTimeout(() => {
       log.error('الإغلاق تأخّر - خروج إجباري');
-      process.exit(1);
+      process.exit(exitCode || 1);
     }, 15000);
     forceExit.unref();
 
     server.close(async () => {
       try { await db.pool.end(); } catch { /* انقفل أصلاً */ }
       log.info('انقفل بأمان');
-      process.exit(0);
+      process.exit(exitCode);
     });
   };
 
@@ -71,7 +83,7 @@ function setupShutdown(server) {
   // خطأ غير ملتقط: نسجّله ونخرج بشكل مرتّب (Render بتعيد التشغيل)
   process.on('uncaughtException', (err) => {
     log.error('خطأ غير ملتقط', { error: err.message, stack: err.stack });
-    shutdown('uncaughtException');
+    shutdown('uncaughtException', 1);
   });
   process.on('unhandledRejection', (reason) => {
     log.error('وعد مرفوض بدون معالجة', {
