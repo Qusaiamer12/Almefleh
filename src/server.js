@@ -43,7 +43,9 @@ async function start() {
     } else {
       log.error('فشل ربط المنفذ', { error: err.message, code: err.code });
     }
-    process.exit(1);
+    // الخروج الفوري بيقطع الكتابة على stdout لما تكون أنبوب (pipe)،
+    // فبنأجّله tick واحد عشان الرسالة توصل فعلاً
+    setImmediate(() => process.exit(1));
   });
 
   if (config.backup.enabled) {

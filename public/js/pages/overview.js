@@ -3,36 +3,13 @@ import { h, clear, dateTime, table } from '../ui.js';
 import { renderStock, renderStatements, renderLoss, renderTransactions } from './shared.js';
 
 /** صفحة الاطّلاع (أبو بلال) - قراءة فقط لكل الأرقام */
-const TABS = [
-  { key: 'stock', label: 'الستوك', render: renderStock },
-  { key: 'statements', label: 'كشوفات الزباين', render: renderStatements },
-  { key: 'transactions', label: 'الحركات', render: (root) => renderTransactions(root) },
-  { key: 'loss', label: 'النقص والفاقد', render: renderLoss },
-  { key: 'requests', label: 'طلبات الزباين', render: renderRequests },
+export const OVERVIEW_NAV = [
+  { key: 'stock', label: 'الستوك', title: 'الستوك اللحظي', icon: 'box', render: renderStock },
+  { key: 'statements', label: 'كشوفات الزباين', title: 'كشوفات الزباين', icon: 'statement', render: renderStatements },
+  { key: 'transactions', label: 'الحركات', title: 'سجل الحركات', icon: 'list', render: (root, ctx) => renderTransactions(root, { ctx }) },
+  { key: 'loss', label: 'النقص والفاقد', title: 'النقص والفاقد', icon: 'loss', render: renderLoss },
+  { key: 'requests', label: 'طلبات الزباين', title: 'طلبات وملاحظات الزباين', icon: 'message', render: renderRequests },
 ];
-
-export function renderOverview(root) {
-  clear(root);
-  const tabsBar = h('div.tabs');
-  const page = h('div.page');
-  root.append(tabsBar, page);
-
-  let active = 'stock';
-  const draw = () => {
-    clear(tabsBar);
-    for (const tab of TABS) {
-      tabsBar.append(h('button', {
-        class: active === tab.key ? 'active' : '',
-        onclick: () => { active = tab.key; draw(); },
-      }, tab.label));
-    }
-    clear(page);
-    page.append(h('div.empty', {}, 'جاري التحميل…'));
-    Promise.resolve(TABS.find((t) => t.key === active).render(page))
-      .catch((err) => { clear(page); page.append(h('div.alert.danger', {}, err.message)); });
-  };
-  draw();
-}
 
 async function renderRequests(root) {
   clear(root);

@@ -41,6 +41,7 @@ export function renderLogin(root, onSuccess) {
     h('div.login-card', {},
       logoImg,
       h('h1', {}, 'نظام مستودعات المفلح'),
+      h('p.tagline', {}, 'إدارة المخزون وكشوفات الحسابات'),
       form)));
 
   setTimeout(() => username.focus(), 50);

@@ -3,37 +3,38 @@ import { h, clear, state, toast, dateTime, table } from '../ui.js';
 import { periodPicker, statementCard } from './shared.js';
 
 /** صفحة الزبون - كشف حسابه هو بس + إرسال ملاحظة/طلب */
-export function renderCustomer(root) {
-  clear(root);
-  const page = h('div.page');
-  root.append(page);
+export const CUSTOMER_NAV = [
+  { key: 'statement', label: 'كشف حسابي', title: 'كشف حسابي', icon: 'statement', render: renderMyStatement },
+  { key: 'requests', label: 'طلباتي', title: 'ملاحظة أو طلب', icon: 'message', render: renderMyRequests },
+];
 
+function renderMyStatement(root) {
+  clear(root);
   const statementBox = h('div');
   let params = { week: 0 };
-
   const picker = periodPicker((p) => { params = p; loadStatement(); });
-
-  page.append(
-    h('div.card.no-print', {}, h('h3', {}, 'فترة الكشف'), picker),
-    statementBox,
-    requestsCard(),
-  );
+  root.append(picker, statementBox);
 
   async function loadStatement() {
     const data = await api.get(`/api/statements/${state.user.entity_id}`, params);
     clear(statementBox);
     statementBox.append(statementCard(data));
   }
-
   loadStatement();
+}
+
+function renderMyRequests(root) {
+  clear(root);
+  root.append(requestsCard());
 }
 
 function requestsCard() {
   const input = h('textarea', { rows: 3, placeholder: 'اكتب ملاحظتك أو طلبك لقصي…' });
   const listBox = h('div');
 
-  const card = h('div.card.no-print', {},
-    h('h3', {}, 'ملاحظة أو طلب'),
+  const card = h('div', {},
+    h('div.card.no-print', {},
+    h('h3', {}, 'اكتب ملاحظة أو طلب'),
     h('div.grid', {},
       input,
       h('div.row', {}, h('button.btn', {
@@ -45,9 +46,8 @@ function requestsCard() {
           toast('انبعت طلبك');
           loadRequests();
         },
-      }, 'إرسال'))),
-    h('h3', { style: 'margin-top:18px' }, 'طلباتي السابقة'),
-    listBox);
+      }, 'إرسال')))),
+    h('div.card', {}, h('h3', {}, 'طلباتي السابقة'), listBox));
 
   async function loadRequests() {
     const { requests } = await api.get('/api/requests');

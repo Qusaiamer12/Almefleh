@@ -18,8 +18,12 @@ const KINDS = [
   { value: 'operator_in', label: 'إدخال من المشغل', needsEntity: true, entityType: 'operator' },
 ];
 
+export const RECORDER_NAV = [
+  { key: 'record', label: 'تسجيل حركة', title: 'تسجيل الحركات', icon: 'cashier', render: renderRecorder },
+];
+
 /** شاشة تسجيل الحركات - مصمّمة للآيباد (تشبه شاشة الكاشير) */
-export async function renderRecorder(root) {
+async function renderRecorder(root, ctx) {
   clear(root);
 
   const ui = {
@@ -44,17 +48,17 @@ export async function renderRecorder(root) {
   const banner = h('div', {});
 
   const layout = h('div.cashier', {},
+    alphaBar,
     h('div.cashier-main', {},
       banner,
       h('div.cashier-bar', {}, kindTabs),
       entityTabs,
       h('div.cashier-bar', {}, searchInput,
-        h('button.btn.gold', { onclick: openNewItem }, '+ صنف جديد')),
+        h('button.btn.gold', { onclick: openNewItem }, 'صنف جديد')),
       itemGrid,
-      h('div.card', { style: 'margin:0;padding:8px' },
-        h('h3', { style: 'margin:4px 8px 6px;font-size:14px' }, 'آخر الحركات اللي سجّلتها'),
-        recentBox)),
-    alphaBar);
+      h('div.card', { style: 'margin:0' },
+        h('h3', {}, 'آخر الحركات اللي سجّلتها'),
+        recentBox)));
   root.append(layout);
 
   // ---------- تحميل البيانات ----------

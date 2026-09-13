@@ -16,6 +16,7 @@ const JS = (f) => path.join(ROOT, 'public', 'js', f);
 
 // الترتيب مهم: الوحدة لازم تيجي بعد اللي بتعتمد عليه
 const MODULES = [
+  { name: 'icons', file: JS('icons.js') },
   { name: 'ui', file: JS('ui.js') },
   { name: 'api', file: path.join(ROOT, 'preview', 'mock-api.js') },
   { name: 'shared', file: JS('pages/shared.js') },
@@ -91,6 +92,8 @@ function build() {
 
 
   const body = `<title>مستودعات المفلح</title>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600&display=swap">
   <style>
 ${css}
 /* ===== شريط النسخة التجريبية ===== */

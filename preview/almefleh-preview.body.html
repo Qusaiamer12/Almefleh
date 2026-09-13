@@ -1,284 +1,542 @@
 <title>مستودعات المفلح</title>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600&display=swap">
   <style>
-/* ===== نظام مستودعات المفلح - هوية بصرية: أخضر غامق + ذهبي ===== */
+/* ==========================================================================
+   نظام مستودعات المفلح - نظام التصميم
+   لوحة إدارية: سايدبار ثابت، لوحة بيضا واسعة، وأخضر المفلح كلون أساسي واحد
+   ========================================================================== */
+
 :root {
-  --green-900: #08291D;
-  --green-800: #0B3D2C;
-  --green-700: #124A34;
-  --green-600: #1B5E3F;
-  --gold-400:  #E7C868;
-  --gold-500:  #C9A227;
-  --gold-600:  #9C7A12;
-  --cream:     #F7F4EA;
-  --paper:     #FFFFFF;
-  --ink:       #1A1A17;
-  --muted:     #6B6B62;
-  --line:      #E2DDCD;
-  --danger:    #B3261E;
-  --danger-bg: #FDECEA;
-  --ok:        #1E7A4B;
-  --warn:      #9A6A00;
-  --warn-bg:   #FFF6DF;
-  --radius:    12px;
-  --shadow:    0 1px 2px rgba(8,41,29,.06), 0 8px 24px rgba(8,41,29,.07);
-  --font: "Segoe UI", "Noto Naskh Arabic", "Dubai", Tahoma, system-ui, sans-serif;
+  /* --- الهوية --- */
+  --brand:        #0F4C36;   /* أخضر المفلح - اللون الأساسي الوحيد */
+  --brand-deep:   #0A3325;
+  --brand-hover:  #14603F;
+  --brand-soft:   #E7F1EC;   /* تعبئة خفيفة للعناصر النشطة */
+  --brand-ring:   rgba(15, 76, 54, .14);
+  --gold:         #C9A227;   /* للتمييز بس - مش لون ثانوي عام */
+  --gold-soft:    #FBF3DC;
+
+  /* --- محايدات مائلة للأخضر (مش رمادي افتراضي) --- */
+  --ink:          #12211B;
+  --ink-soft:     #33463D;
+  --muted:        #6E7F77;
+  --line:         #E5EBE8;
+  --line-strong:  #D3DCD8;
+  --panel:        #FFFFFF;
+  --canvas:       #EFF4F1;
+  --canvas-tint:  #E9F0F3;
+
+  /* --- دلالية (منفصلة عن لون الهوية) --- */
+  --danger:       #C0392B;
+  --danger-soft:  #FDECEA;
+  --ok:           #1E7A4B;
+  --ok-soft:      #E6F4EC;
+  --warn:         #9A6A00;
+  --warn-soft:    #FDF4E0;
+
+  /* --- أشكال --- */
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-pill: 999px;
+  --shadow-sm: 0 1px 2px rgba(18, 33, 27, .05);
+  --shadow-md: 0 4px 16px rgba(18, 33, 27, .06);
+  --shadow-lg: 0 18px 48px rgba(18, 33, 27, .12);
+
+  --sidebar-w: 236px;
+  --topbar-h: 68px;
+
+  --font-display: "Cairo", "Segoe UI", Tahoma, sans-serif;
+  --font-body: "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif;
+
+  color-scheme: light;
 }
 
 * { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; }
+html, body { margin: 0; padding: 0; height: 100%; }
 body {
-  font-family: var(--font);
-  background: var(--cream);
+  font-family: var(--font-body);
+  background: var(--canvas);
   color: var(--ink);
   direction: rtl;
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
   -webkit-text-size-adjust: 100%;
 }
 button, input, select, textarea { font: inherit; color: inherit; }
-a { color: var(--green-700); }
+a { color: var(--brand); text-decoration: none; }
+a:hover { text-decoration: underline; }
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 6px; }
 
-/* ===== الهيدر ===== */
-.topbar {
-  background: linear-gradient(180deg, var(--green-700), var(--green-800));
-  color: #fff;
-  display: flex; align-items: center; gap: 14px;
-  padding: 10px 16px;
-  position: sticky; top: 0; z-index: 40;
-  border-bottom: 3px solid var(--gold-500);
-  box-shadow: 0 2px 12px rgba(8,41,29,.18);
+/* ==========================================================================
+   الهيكل: سايدبار + محتوى
+   ========================================================================== */
+.shell { display: flex; min-height: 100vh; }
+
+.sidebar {
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+  background: var(--panel);
+  border-inline-start: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  padding: 18px 14px;
+  gap: 6px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
 }
-.topbar .logo { height: 42px; width: auto; display: block; }
-.topbar .brand { display: flex; flex-direction: column; line-height: 1.2; }
-.topbar .brand b { font-size: 16px; letter-spacing: .3px; }
-.topbar .brand small { color: var(--gold-400); font-size: 12px; }
+.brand {
+  display: flex; align-items: center; gap: 10px;
+  padding: 4px 8px 20px;
+}
+.brand img { width: 38px; height: 38px; border-radius: 11px; object-fit: contain; background: var(--brand-deep); padding: 4px; }
+.brand-text { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+.brand-text b { font-family: var(--font-display); font-size: 15px; font-weight: 800; letter-spacing: -.01em; }
+.brand-text span { font-size: 11px; color: var(--muted); }
+
+.nav { display: flex; flex-direction: column; gap: 2px; }
+.nav button {
+  display: flex; align-items: center; gap: 11px;
+  width: 100%; text-align: start;
+  padding: 10px 12px;
+  border: none; background: none; cursor: pointer;
+  border-radius: var(--r-sm);
+  color: var(--ink-soft);
+  font-size: 14px; font-weight: 500;
+}
+.nav button:hover { background: var(--canvas); }
+.nav button.active { background: var(--brand); color: #fff; font-weight: 600; box-shadow: var(--shadow-sm); }
+.nav button .ico { width: 18px; height: 18px; flex-shrink: 0; opacity: .9; }
+.nav button.active .ico { opacity: 1; }
+.nav .count {
+  margin-inline-start: auto; background: var(--gold-soft); color: var(--warn);
+  border-radius: var(--r-pill); font-size: 11px; font-weight: 700; padding: 1px 7px;
+}
+.nav button.active .count { background: rgba(255,255,255,.22); color: #fff; }
+
+.sidebar .spacer { flex: 1; }
+.sidebar-foot { border-top: 1px solid var(--line); padding-top: 10px; display: flex; flex-direction: column; gap: 2px; }
+.sidebar-foot button {
+  display: flex; align-items: center; gap: 11px;
+  width: 100%; text-align: start; padding: 10px 12px;
+  border: none; background: none; cursor: pointer;
+  border-radius: var(--r-sm); color: var(--muted);
+  font-size: 13.5px; font-weight: 500;
+}
+.sidebar-foot button:hover { background: var(--canvas); color: var(--ink-soft); }
+
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+/* --- الشريط العلوي --- */
+.topbar {
+  height: var(--topbar-h);
+  display: flex; align-items: center; gap: 14px;
+  padding: 0 24px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; z-index: 40;
+}
+.search {
+  flex: 1; max-width: 380px; position: relative;
+}
+.search input {
+  width: 100%; border: 1px solid var(--line); background: var(--canvas);
+  border-radius: var(--r-pill); padding: 9px 40px 9px 16px; font-size: 13.5px;
+}
+.search input:focus { background: var(--panel); border-color: var(--brand); box-shadow: 0 0 0 4px var(--brand-ring); outline: none; }
+.search .ico { position: absolute; inset-inline-start: 14px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
 .topbar .spacer { flex: 1; }
-.topbar .who { font-size: 13px; text-align: left; }
-.topbar .who b { display: block; }
-.topbar .who span { color: var(--gold-400); font-size: 12px; }
 
 .icon-btn {
-  background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.18);
-  color: #fff; border-radius: 10px; padding: 8px 11px; cursor: pointer;
-  position: relative; display: inline-flex; align-items: center; gap: 6px;
+  position: relative; width: 40px; height: 40px;
+  display: grid; place-items: center;
+  border: 1px solid var(--line); background: var(--panel);
+  border-radius: var(--r-pill); cursor: pointer; color: var(--ink-soft);
 }
-.icon-btn:hover { background: rgba(255,255,255,.18); }
+.icon-btn:hover { background: var(--canvas); border-color: var(--line-strong); }
 .bell-dot {
-  position: absolute; top: -5px; inset-inline-start: -5px;
-  background: var(--gold-500); color: var(--green-900);
-  border-radius: 999px; min-width: 19px; height: 19px; padding: 0 5px;
-  font-size: 11px; font-weight: 700; display: grid; place-items: center;
+  position: absolute; top: -3px; inset-inline-start: -3px;
+  background: var(--gold); color: var(--brand-deep);
+  border: 2px solid var(--panel);
+  border-radius: var(--r-pill); min-width: 20px; height: 20px; padding: 0 4px;
+  font-size: 10.5px; font-weight: 700; display: grid; place-items: center;
 }
 
-/* ===== التبويبات ===== */
-.tabs {
-  display: flex; gap: 4px; overflow-x: auto; padding: 8px 12px 0;
-  background: var(--paper); border-bottom: 1px solid var(--line);
-  position: sticky; top: 65px; z-index: 30;
+.account { display: flex; align-items: center; gap: 10px; padding-inline-start: 6px; }
+.account .avatar {
+  width: 38px; height: 38px; border-radius: var(--r-pill);
+  background: var(--brand); color: #fff;
+  display: grid; place-items: center; font-weight: 700; font-size: 14px;
+  font-family: var(--font-display); flex-shrink: 0;
 }
-.tabs button {
-  background: none; border: none; border-bottom: 3px solid transparent;
-  padding: 9px 14px; cursor: pointer; color: var(--muted); white-space: nowrap;
-  border-radius: 8px 8px 0 0; font-weight: 600;
-}
-.tabs button:hover { background: var(--cream); }
-.tabs button.active { color: var(--green-800); border-bottom-color: var(--gold-500); }
+.account .who { display: flex; flex-direction: column; line-height: 1.3; }
+.account .who b { font-size: 13.5px; font-weight: 600; }
+.account .who span { font-size: 11.5px; color: var(--muted); }
 
-/* ===== التخطيط ===== */
-.page { padding: 16px; max-width: 1280px; margin: 0 auto; }
+/* --- منطقة المحتوى --- */
+.content { padding: 22px 24px 40px; flex: 1; }
+.panel {
+  background: var(--panel);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-md);
+  padding: 24px;
+  min-height: calc(100vh - var(--topbar-h) - 62px);
+}
+
+.page-head {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.page-head h1 {
+  font-family: var(--font-display);
+  font-size: 26px; font-weight: 800; margin: 0;
+  letter-spacing: -.02em; text-wrap: balance;
+}
+.page-head .sub { color: var(--muted); font-size: 13px; }
+.page-head .spacer { flex: 1; }
+
+/* شريط أدوات: تبويبات فرعية يسار + أدوات يمين */
+.toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+.toolbar .spacer { flex: 1; }
+
+.segment { display: inline-flex; gap: 6px; }
+.segment button {
+  border: none; background: var(--canvas); color: var(--ink-soft);
+  padding: 8px 18px; border-radius: var(--r-pill);
+  cursor: pointer; font-size: 13.5px; font-weight: 600;
+}
+.segment button:hover { background: var(--brand-soft); }
+.segment button.active { background: var(--brand); color: #fff; }
+
+/* ==========================================================================
+   الأزرار
+   ========================================================================== */
+.btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: var(--brand); color: #fff; border: 1px solid transparent;
+  border-radius: var(--r-pill); padding: 10px 18px;
+  cursor: pointer; font-weight: 600; font-size: 13.5px;
+  box-shadow: var(--shadow-sm);
+}
+.btn:hover { background: var(--brand-hover); }
+.btn:disabled { opacity: .55; cursor: not-allowed; box-shadow: none; }
+.btn.ghost { background: var(--panel); color: var(--ink-soft); border-color: var(--line-strong); box-shadow: none; }
+.btn.ghost:hover { background: var(--canvas); }
+.btn.gold { background: var(--gold); color: var(--brand-deep); border-color: transparent; }
+.btn.gold:hover { background: #D9B63E; }
+.btn.danger { background: var(--panel); color: var(--danger); border-color: #F0CFC9; box-shadow: none; }
+.btn.danger:hover { background: var(--danger-soft); }
+.btn.sm { padding: 6px 13px; font-size: 12.5px; }
+
+/* ==========================================================================
+   البطاقات والأرقام
+   ========================================================================== */
 .card {
-  background: var(--paper); border: 1px solid var(--line);
-  border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow);
-  margin-bottom: 16px;
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--r-md); padding: 18px; margin-bottom: 16px;
 }
-.card > h3 { margin: 0 0 12px; font-size: 16px; display: flex; align-items: center; gap: 8px; }
-.card > h3 .sub { font-weight: 400; color: var(--muted); font-size: 13px; }
+.card > h3 {
+  font-family: var(--font-display);
+  margin: 0 0 14px; font-size: 16px; font-weight: 700;
+  display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
+}
+.card > h3 .sub { font-family: var(--font-body); font-weight: 400; color: var(--muted); font-size: 12.5px; }
+
 .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
-.grid { display: grid; gap: 12px; }
+.grid { display: grid; gap: 14px; }
 .grid.cols-4 { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
 .grid.cols-2 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
 
-/* ===== بطاقات الأرقام ===== */
+/* بطاقة رقم: بلا إطار ثقيل - التمييز بالحجم مش بالحدود */
 .stat {
-  background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius);
-  padding: 14px; border-top: 3px solid var(--gold-500);
+  background: var(--canvas); border-radius: var(--r-md);
+  padding: 16px 18px; border: 1px solid transparent;
 }
-.stat .label { color: var(--muted); font-size: 13px; }
-.stat .value { font-size: 26px; font-weight: 700; color: var(--green-800); margin-top: 2px; }
-.stat.danger { border-top-color: var(--danger); }
+.stat .label { color: var(--muted); font-size: 12.5px; font-weight: 500; }
+.stat .value {
+  font-family: var(--font-display); font-size: 25px; font-weight: 800;
+  color: var(--brand-deep); margin-top: 3px; letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+}
+.stat.danger { background: var(--danger-soft); }
 .stat.danger .value { color: var(--danger); }
 
-/* ===== الحقول ===== */
-label.field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
-input, select, textarea {
-  background: var(--paper); border: 1px solid var(--line); border-radius: 9px;
-  padding: 9px 11px; min-width: 0; outline: none;
+/* ==========================================================================
+   الجداول - للبيانات المالية (صفوف واسعة، بلا خطوط ثقيلة)
+   ========================================================================== */
+.table-wrap {
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--line); border-radius: var(--r-md);
 }
-input:focus, select:focus, textarea:focus { border-color: var(--green-600); box-shadow: 0 0 0 3px rgba(27,94,63,.12); }
-input[type="number"] { text-align: right; }
-
-.btn {
-  background: var(--green-700); color: #fff; border: none; border-radius: 9px;
-  padding: 10px 16px; cursor: pointer; font-weight: 600;
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th, td { padding: 12px 14px; text-align: start; white-space: nowrap; }
+th {
+  color: var(--muted); font-weight: 600; font-size: 12px;
+  background: var(--canvas); position: sticky; top: 0;
+  border-bottom: 1px solid var(--line);
 }
-.btn:hover { background: var(--green-600); }
-.btn:disabled { opacity: .5; cursor: not-allowed; }
-.btn.ghost { background: transparent; color: var(--green-800); border: 1px solid var(--line); }
-.btn.ghost:hover { background: var(--cream); }
-.btn.gold { background: var(--gold-500); color: var(--green-900); border-color: var(--gold-500); }
-.btn.gold:hover { background: var(--gold-400); }
-.btn.danger { background: var(--danger); }
-.btn.sm { padding: 5px 10px; font-size: 13px; border-radius: 7px; }
-
-/* ===== الجداول ===== */
-.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-th, td { padding: 9px 10px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
-th { color: var(--muted); font-weight: 600; font-size: 13px; background: var(--cream); position: sticky; top: 0; }
-tbody tr:hover { background: #FBFAF5; }
+td { border-bottom: 1px solid var(--line); }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: #FAFCFB; }
 td.num, th.num { font-variant-numeric: tabular-nums; }
-tr.neg td { background: var(--danger-bg); }
-tfoot td { font-weight: 700; background: var(--cream); }
+tr.neg td { background: var(--danger-soft); }
+tr.neg:hover td { background: #FBE3DF; }
+tfoot td { font-weight: 700; background: var(--canvas); border-top: 1px solid var(--line-strong); border-bottom: none; }
 
-.pill {
-  display: inline-block; padding: 2px 9px; border-radius: 999px;
-  font-size: 12px; font-weight: 600; background: var(--cream); border: 1px solid var(--line);
+/* ==========================================================================
+   صفوف قابلة للتوسيع (للحركات) - نمط بطاقة الصف
+   ========================================================================== */
+.day-group { margin-bottom: 22px; }
+.day-head {
+  display: flex; align-items: baseline; gap: 9px;
+  margin: 0 2px 10px; font-size: 13.5px;
 }
-.pill.out { background: var(--danger-bg); color: var(--danger); border-color: #F3C9C5; }
-.pill.in  { background: #E8F5EE; color: var(--ok); border-color: #BEE3CE; }
-.pill.pay { background: var(--warn-bg); color: var(--warn); border-color: #F0DFB0; }
-.pill.warn{ background: var(--warn-bg); color: var(--warn); border-color: #F0DFB0; }
+.day-head b { font-family: var(--font-display); font-weight: 700; }
+.day-head span { color: var(--muted); font-size: 12.5px; }
+
+.entry {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--r-md); padding: 14px 16px; margin-bottom: 10px;
+}
+.entry.open { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-ring); }
+.entry-main { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.entry-main .spacer { flex: 1; }
+.field { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.field .k { color: var(--muted); font-size: 11.5px; font-weight: 500; }
+.field .v { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.entry-more {
+  margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line);
+  display: flex; gap: 22px; align-items: flex-end; flex-wrap: wrap;
+}
+.link-more { background: none; border: none; color: var(--brand); cursor: pointer; font-weight: 600; font-size: 13px; }
+.link-more:hover { text-decoration: underline; }
+
+/* ==========================================================================
+   شارات وتنبيهات
+   ========================================================================== */
+.pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: var(--r-pill);
+  font-size: 12px; font-weight: 600;
+  background: var(--canvas); color: var(--ink-soft);
+}
+.pill.out  { background: var(--danger-soft); color: var(--danger); }
+.pill.in   { background: var(--ok-soft); color: var(--ok); }
+.pill.pay  { background: var(--gold-soft); color: var(--warn); }
+.pill.warn { background: var(--warn-soft); color: var(--warn); }
 
 .muted { color: var(--muted); }
 .mono { font-variant-numeric: tabular-nums; }
-.right { text-align: left; }
-.empty { text-align: center; color: var(--muted); padding: 28px 12px; }
+.empty { text-align: center; color: var(--muted); padding: 40px 16px; font-size: 13.5px; }
 
-/* ===== التنبيهات ===== */
-.alert { border-radius: var(--radius); padding: 12px 14px; margin-bottom: 12px; border: 1px solid; }
-.alert.danger { background: var(--danger-bg); border-color: #F3C9C5; color: var(--danger); font-weight: 600; }
-.alert.warn { background: var(--warn-bg); border-color: #F0DFB0; color: var(--warn); }
-.alert.ok { background: #E8F5EE; border-color: #BEE3CE; color: var(--ok); }
-.alert.big { font-size: 17px; padding: 16px; display: flex; gap: 10px; align-items: center; }
-
-#toasts { position: fixed; bottom: 18px; inset-inline-start: 18px; z-index: 90; display: grid; gap: 8px; }
-.toast {
-  background: var(--green-800); color: #fff; padding: 11px 15px; border-radius: 10px;
-  box-shadow: var(--shadow); max-width: 380px; animation: pop .18s ease-out;
-  border-inline-start: 4px solid var(--gold-500);
+.alert {
+  border-radius: var(--r-md); padding: 13px 16px; margin-bottom: 14px;
+  font-size: 13.5px; border: 1px solid transparent;
 }
-.toast.err { background: var(--danger); border-inline-start-color: #7A1712; }
-@keyframes pop { from { transform: translateY(8px); opacity: 0; } }
+.alert.danger { background: var(--danger-soft); border-color: #F3D3CE; color: #8E2A20; font-weight: 600; }
+.alert.warn   { background: var(--warn-soft); border-color: #F0E0BC; color: #7A5400; }
+.alert.ok     { background: var(--ok-soft); border-color: #C7E5D5; color: var(--ok); }
+.alert.big { font-size: 16px; padding: 18px; display: flex; gap: 12px; align-items: center; }
+.alert.big span:first-child { font-size: 22px; }
 
-/* ===== النوافذ ===== */
+#toasts { position: fixed; bottom: 20px; inset-inline-end: 20px; z-index: 90; display: grid; gap: 8px; }
+.toast {
+  background: var(--brand-deep); color: #fff; padding: 12px 17px;
+  border-radius: var(--r-md); box-shadow: var(--shadow-lg); max-width: 380px;
+  font-size: 13.5px; animation: rise .2s ease-out;
+}
+.toast.err { background: var(--danger); }
+@keyframes rise { from { transform: translateY(10px); opacity: 0; } }
+
+/* ==========================================================================
+   النوافذ
+   ========================================================================== */
 .modal-bg {
-  position: fixed; inset: 0; background: rgba(8,41,29,.45); z-index: 80;
-  display: grid; place-items: center; padding: 16px;
+  position: fixed; inset: 0; background: rgba(10, 51, 37, .38);
+  backdrop-filter: blur(2px);
+  z-index: 80; display: grid; place-items: center; padding: 18px;
 }
 .modal {
-  background: var(--paper); border-radius: 16px; padding: 20px; width: min(560px, 100%);
-  max-height: 90vh; overflow: auto; box-shadow: 0 20px 60px rgba(0,0,0,.3);
+  background: var(--panel); border-radius: var(--r-lg); padding: 24px;
+  width: min(560px, 100%); max-height: 90vh; overflow: auto;
+  box-shadow: var(--shadow-lg);
 }
-.modal h3 { margin: 0 0 14px; }
-.modal .actions { display: flex; gap: 8px; justify-content: flex-start; margin-top: 18px; }
+.modal h3 { font-family: var(--font-display); margin: 0 0 16px; font-size: 19px; font-weight: 800; }
+.modal .actions { display: flex; gap: 9px; margin-top: 22px; }
 
-/* ===== قائمة التنبيهات ===== */
-.notif-panel {
-  position: fixed; top: 64px; inset-inline-start: 12px; width: min(400px, calc(100vw - 24px));
-  background: var(--paper); border: 1px solid var(--line); border-radius: 14px;
-  box-shadow: 0 18px 50px rgba(0,0,0,.22); z-index: 70; max-height: 70vh; overflow: auto;
+/* ==========================================================================
+   الحقول
+   ========================================================================== */
+label.field { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: var(--muted); font-weight: 500; }
+input, select, textarea {
+  background: var(--panel); border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm); padding: 9px 12px; min-width: 0;
+  color: var(--ink); font-size: 13.5px;
 }
-.notif-panel header { padding: 12px 14px; border-bottom: 1px solid var(--line); display: flex; align-items: center; }
-.notif { padding: 11px 14px; border-bottom: 1px solid var(--line); }
-.notif.unread { background: #FBF8EC; border-inline-start: 3px solid var(--gold-500); }
-.notif b { display: block; font-size: 14px; }
-.notif p { margin: 3px 0 0; font-size: 13px; color: var(--muted); }
+input:focus, select:focus, textarea:focus {
+  outline: none; border-color: var(--brand); box-shadow: 0 0 0 4px var(--brand-ring);
+}
+input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--brand); }
+
+/* ==========================================================================
+   التنبيهات (قائمة الجرس)
+   ========================================================================== */
+.notif-panel {
+  position: fixed; top: 62px; inset-inline-start: 18px;
+  width: min(400px, calc(100vw - 28px));
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--r-lg); box-shadow: var(--shadow-lg);
+  z-index: 70; max-height: 72vh; overflow: auto;
+}
+.notif-panel header {
+  padding: 14px 16px; border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--font-display);
+}
+.notif { padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.notif:last-child { border-bottom: none; }
+.notif.unread { background: #FBFDFC; border-inline-start: 3px solid var(--gold); }
+.notif b { display: block; font-size: 13.5px; font-weight: 600; }
+.notif p { margin: 3px 0 0; font-size: 12.5px; color: var(--muted); }
 .notif time { font-size: 11px; color: var(--muted); }
 
-/* ===== شاشة الكاشير (آيباد) ===== */
-.cashier { display: grid; grid-template-columns: 1fr 56px; gap: 10px; height: calc(100vh - 68px); padding: 10px; }
-.cashier-main { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
-.cashier-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-.cashier-bar input[type="search"] { flex: 1; min-width: 180px; font-size: 17px; padding: 12px 14px; }
-.entity-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
-.entity-tabs button {
-  border: 2px solid var(--line); background: var(--paper); border-radius: 12px;
-  padding: 10px 16px; cursor: pointer; font-weight: 700; font-size: 15px;
+/* ==========================================================================
+   شاشة التسجيل (الآيباد)
+   ========================================================================== */
+.cashier { display: grid; grid-template-columns: 52px 1fr; gap: 12px; }
+.cashier-main { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.cashier-bar { display: flex; gap: 9px; flex-wrap: wrap; align-items: center; }
+.cashier-bar input[type="search"] {
+  flex: 1; min-width: 200px; font-size: 15px; padding: 12px 16px;
+  border-radius: var(--r-pill); background: var(--canvas);
 }
-.entity-tabs button.active { border-color: var(--gold-500); background: var(--green-700); color: #fff; }
-.kind-tabs button.active { border-color: var(--gold-500); background: var(--gold-500); color: var(--green-900); }
+.entity-tabs { display: flex; gap: 7px; flex-wrap: wrap; }
+.entity-tabs button {
+  border: 1px solid var(--line-strong); background: var(--panel);
+  border-radius: var(--r-pill); padding: 9px 18px;
+  cursor: pointer; font-weight: 600; font-size: 14px; color: var(--ink-soft);
+}
+.entity-tabs button:hover { border-color: var(--brand); color: var(--brand); }
+.entity-tabs button.active { background: var(--brand); color: #fff; border-color: var(--brand); }
+.kind-tabs button.active { background: var(--gold); color: var(--brand-deep); border-color: var(--gold); }
 
 .item-grid {
-  flex: 1; overflow-y: auto; display: grid; gap: 10px;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); align-content: start;
-  padding: 4px; min-height: 0;
+  display: grid; gap: 11px;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  align-content: start;
 }
 .item-tile {
-  background: var(--paper); border: 2px solid var(--line); border-radius: 14px;
-  padding: 14px 10px; text-align: center; cursor: pointer; font-weight: 700; font-size: 16px;
-  min-height: 86px; display: flex; flex-direction: column; justify-content: center; gap: 4px;
+  background: var(--panel); border: 1px solid var(--line-strong);
+  border-radius: var(--r-md); padding: 15px 11px; text-align: center;
+  cursor: pointer; font-weight: 600; font-size: 15px;
+  min-height: 88px; display: flex; flex-direction: column; justify-content: center; gap: 4px;
   -webkit-tap-highlight-color: transparent;
 }
-.item-tile:active { transform: scale(.97); }
-.item-tile:hover { border-color: var(--gold-500); }
-.item-tile small { font-weight: 500; color: var(--muted); font-size: 12px; }
-.item-tile.add { border-style: dashed; color: var(--green-700); }
+.item-tile:hover { border-color: var(--brand); background: var(--brand-soft); }
+.item-tile:active { transform: scale(.98); }
+.item-tile small { font-weight: 500; color: var(--muted); font-size: 11.5px; }
 
 .alpha-bar {
-  display: flex; flex-direction: column; gap: 2px; overflow-y: auto;
-  background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 4px;
+  display: flex; flex-direction: column; gap: 1px; overflow-y: auto;
+  background: var(--canvas); border-radius: var(--r-pill); padding: 6px 3px;
+  align-self: start; max-height: 70vh;
 }
 .alpha-bar button {
-  border: none; background: none; cursor: pointer; padding: 5px 0; border-radius: 7px;
-  font-size: 15px; font-weight: 700; color: var(--green-800); width: 100%;
+  border: none; background: none; cursor: pointer; padding: 4px 0;
+  border-radius: var(--r-pill); font-size: 14px; font-weight: 700; color: var(--brand);
 }
-.alpha-bar button:hover { background: var(--cream); }
-.alpha-bar button.active { background: var(--green-700); color: #fff; }
-.alpha-bar button.off { color: #C9C6BA; }
+.alpha-bar button:hover { background: var(--panel); }
+.alpha-bar button.active { background: var(--brand); color: #fff; }
+.alpha-bar button.off { color: #B9C6C0; }
 
-.keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; direction: ltr; }
+.keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; margin-top: 12px; direction: ltr; }
 .keypad button {
-  padding: 13px; font-size: 20px; font-weight: 700; border-radius: 12px;
-  border: 1px solid var(--line); background: var(--paper); cursor: pointer;
+  padding: 14px; font-size: 20px; font-weight: 700;
+  border-radius: var(--r-md); border: 1px solid var(--line-strong);
+  background: var(--panel); cursor: pointer;
 }
-.keypad button:active { background: var(--cream); }
+.keypad button:hover { background: var(--canvas); border-color: var(--brand); }
 .qty-display {
-  font-size: 30px; font-weight: 700; text-align: center; padding: 12px; direction: ltr;
-  background: var(--cream); border-radius: 12px; border: 2px solid var(--gold-500);
-  min-height: 64px; font-variant-numeric: tabular-nums;
+  font-size: 30px; font-weight: 800; text-align: center; padding: 14px;
+  background: var(--canvas); border-radius: var(--r-md);
+  border: 2px solid var(--brand); min-height: 64px;
+  font-variant-numeric: tabular-nums; direction: ltr;
+  font-family: var(--font-display);
 }
 
-.recent { max-height: 190px; overflow-y: auto; }
-.recent-row { display: flex; gap: 8px; align-items: center; padding: 7px 10px; border-bottom: 1px solid var(--line); font-size: 14px; }
-.recent-row .grow { flex: 1; }
+.recent { display: flex; flex-direction: column; gap: 8px; max-height: 260px; overflow-y: auto; }
+.recent-row {
+  display: flex; gap: 10px; align-items: center;
+  padding: 10px 13px; font-size: 13.5px;
+  background: var(--canvas); border-radius: var(--r-sm);
+}
+.recent-row .grow { flex: 1; min-width: 0; }
 
-/* ===== شاشة الدخول ===== */
+/* ==========================================================================
+   شاشة الدخول
+   ========================================================================== */
 .login-wrap {
-  min-height: 100vh; display: grid; place-items: center; padding: 20px;
-  background: radial-gradient(circle at 50% 0%, var(--green-700), var(--green-900) 70%);
+  min-height: 100vh; display: grid; place-items: center; padding: 22px;
+  background:
+    radial-gradient(1100px 600px at 80% -10%, #16593F 0%, transparent 60%),
+    linear-gradient(160deg, var(--brand-deep), #061D15);
 }
 .login-card {
-  background: var(--paper); border-radius: 20px; padding: 30px 26px; width: min(400px, 100%);
-  box-shadow: 0 24px 70px rgba(0,0,0,.4); border-top: 5px solid var(--gold-500);
+  background: var(--panel); border-radius: 24px; padding: 34px 30px;
+  width: min(410px, 100%); box-shadow: 0 30px 80px rgba(0, 0, 0, .4);
 }
-.login-card .logo { width: 220px; max-width: 100%; display: block; margin: 0 auto 18px; }
-.login-card h1 { font-size: 19px; text-align: center; margin: 0 0 22px; color: var(--green-800); }
-.login-card label.field { margin-bottom: 14px; }
-.login-card .btn { width: 100%; padding: 13px; font-size: 16px; }
+.login-card .logo { width: 210px; max-width: 100%; display: block; margin: 0 auto 20px; }
+.login-card h1 {
+  font-family: var(--font-display); font-size: 20px; font-weight: 800;
+  text-align: center; margin: 0 0 6px; color: var(--brand-deep);
+}
+.login-card .tagline { text-align: center; color: var(--muted); font-size: 13px; margin: 0 0 24px; }
+.login-card label.field { margin-bottom: 15px; }
+.login-card .btn { width: 100%; justify-content: center; padding: 13px; font-size: 15px; }
 
-/* ===== الطباعة ===== */
+/* ==========================================================================
+   الطباعة
+   ========================================================================== */
 @media print {
-  .topbar, .tabs, .no-print, .btn, #toasts { display: none !important; }
+  .sidebar, .topbar, .no-print, .btn, #toasts, .toolbar { display: none !important; }
   body { background: #fff; }
-  .card { box-shadow: none; border: 1px solid #ccc; page-break-inside: avoid; }
-  .page { padding: 0; max-width: none; }
+  .panel { box-shadow: none; border: none; padding: 0; }
+  .content { padding: 0; }
 }
 
-@media (max-width: 720px) {
-  .page { padding: 12px; }
-  .topbar .brand small { display: none; }
-  .cashier { grid-template-columns: 1fr 46px; height: auto; }
+/* ==========================================================================
+   الشاشات الصغيرة
+   ========================================================================== */
+@media (max-width: 1000px) {
+  .shell { flex-direction: column; }
+  .sidebar {
+    width: 100%; height: auto; position: sticky; top: 0; z-index: 45;
+    flex-direction: row; align-items: center; gap: 10px;
+    padding: 10px 14px; border-inline-start: none; border-bottom: 1px solid var(--line);
+  }
+  .brand { padding: 0; }
+  .brand-text { display: none; }
+  .nav {
+    flex-direction: row; overflow-x: auto; gap: 6px; flex: 1;
+    scrollbar-width: none;
+  }
+  .nav::-webkit-scrollbar { display: none; }
+  .nav button { white-space: nowrap; padding: 8px 14px; }
+  .sidebar .spacer, .sidebar-foot { display: none; }
+  .topbar { padding: 0 14px; }
+  .content { padding: 14px; }
+  .panel { padding: 16px; border-radius: var(--r-md); min-height: 0; }
+}
+@media (max-width: 640px) {
+  .search { display: none; }
+  .account .who { display: none; }
+  .page-head h1 { font-size: 21px; }
   .item-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+  .cashier { grid-template-columns: 44px 1fr; }
 }
 
 /* ===== شريط النسخة التجريبية ===== */
@@ -318,6 +576,50 @@ body { padding-bottom: 46px; }
   </div>
 
   <script type="module">
+
+// ===== public/js/icons.js =====
+// أيقونات خطّية مرسومة inline - بلا مكتبة خارجية
+const PATHS = {
+  dashboard: 'M4 13h7V4H4v9Zm0 7h7v-5H4v5Zm9 0h7v-9h-7v9Zm0-16v5h7V4h-7Z',
+  box: 'M21 8 12 3 3 8m18 0-9 5m9-5v8l-9 5m0-8L3 8m9 5v8M3 8v8l9 5',
+  list: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01',
+  tag: 'M20.6 13.4 12 22l-9-9V3h10l7.6 7.6a2 2 0 0 1 0 2.8ZM7.5 7.5h.01',
+  recipe: 'M9 3v6l-5 8a3 3 0 0 0 2.6 4.5h10.8A3 3 0 0 0 20 17l-5-8V3M9 3h6M7 14h10',
+  statement: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Zm0 0v6h6M9 13h6M9 17h6',
+  loss: 'M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0ZM12 9v4M12 17h.01',
+  users: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm13 10v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8',
+  message: 'M21 11.5a8.4 8.4 0 0 1-9 8.4 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.1A8.4 8.4 0 0 1 4 12a8.5 8.5 0 0 1 8.4-8.5h.6a8.5 8.5 0 0 1 8 8v.1Z',
+  audit: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Zm-3-10 2 2 4-4',
+  settings: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm7.4-3a7.4 7.4 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7.5 7.5 0 0 0-2-1.2l-.4-2.6h-4l-.4 2.6a7.5 7.5 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6a7.6 7.6 0 0 0 0 2.4l-2 1.6 2 3.4 2.4-1a7.5 7.5 0 0 0 2 1.2l.4 2.6h4l.4-2.6a7.5 7.5 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2Z',
+  logout: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
+  search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm10 2-4.3-4.3',
+  bell: 'M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0',
+  plus: 'M12 5v14M5 12h14',
+  download: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3',
+  print: 'M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6v-8Z',
+  cashier: 'M3 3h18v4H3zM5 7v14h14V7M9 11h6M9 15h6',
+  user: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z',
+};
+
+/** @returns {SVGElement} أيقونة بحجم 18 بكسل */
+function icon(name, size = 18) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('width', size);
+  svg.setAttribute('height', size);
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '1.8');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('stroke-linejoin', 'round');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.classList.add('ico');
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', PATHS[name] || PATHS.list);
+  svg.append(path);
+  return svg;
+}
+
 
 // ===== public/js/ui.js =====
 // أدوات بناء الواجهة
@@ -1334,6 +1636,7 @@ const api = {
 
 
 
+
 /** شريط اختيار الفترة: أسبوعي (يبلّش السبت) أو مدى مخصّص */
 function periodPicker(onChange) {
   let mode = 'week';
@@ -1345,37 +1648,41 @@ function periodPicker(onChange) {
     h('label.field', {}, 'إلى', to),
     h('button.btn.sm', { onclick: () => emit() }, 'اعرض'));
 
-  const buttons = h('div.row');
+  const buttons = h('div.segment');
   const emit = () => onChange(mode === 'week' ? { week: offset } : { from: from.value, to: to.value });
 
   const setMode = (newMode, newOffset = 0) => {
     mode = newMode; offset = newOffset;
     customBox.style.display = mode === 'custom' ? 'flex' : 'none';
-    for (const b of buttons.querySelectorAll('button')) b.classList.remove('gold');
-    buttons.querySelector(`[data-key="${mode}${mode === 'week' ? offset : ''}"]`)?.classList.add('gold');
+    for (const b of buttons.querySelectorAll('button')) b.classList.remove('active');
+    buttons.querySelector(`[data-key="${mode}${mode === 'week' ? offset : ''}"]`)?.classList.add('active');
     if (mode !== 'custom') emit();
   };
 
   buttons.append(
-    h('button.btn.ghost.sm', { dataset: { key: 'week0' }, onclick: () => setMode('week', 0) }, 'هذا الأسبوع'),
-    h('button.btn.ghost.sm', { dataset: { key: 'week-1' }, onclick: () => setMode('week', -1) }, 'الأسبوع اللي فات'),
-    h('button.btn.ghost.sm', { dataset: { key: 'week-2' }, onclick: () => setMode('week', -2) }, 'قبل أسبوعين'),
-    h('button.btn.ghost.sm', { dataset: { key: 'custom' }, onclick: () => setMode('custom') }, 'فترة مخصّصة'),
+    h('button', { dataset: { key: 'week0' }, onclick: () => setMode('week', 0) }, 'هذا الأسبوع'),
+    h('button', { dataset: { key: 'week-1' }, onclick: () => setMode('week', -1) }, 'الأسبوع اللي فات'),
+    h('button', { dataset: { key: 'week-2' }, onclick: () => setMode('week', -2) }, 'قبل أسبوعين'),
+    h('button', { dataset: { key: 'custom' }, onclick: () => setMode('custom') }, 'فترة مخصّصة'),
   );
 
-  const box = h('div', {}, buttons, customBox);
+  const box = h('div.toolbar', {}, buttons, h('div.spacer'), customBox);
   setTimeout(() => setMode('week', 0), 0);
   return box;
 }
 
 /** تقرير الستوك اللحظي */
-async function renderStock(root) {
+async function renderStock(root, ctx) {
   clear(root);
   const body = h('div');
   root.append(body);
 
   const { items, summary } = await api.get('/api/stock');
   clear(body);
+  ctx?.actions?.append(h('button.btn.ghost.no-print', {
+    onclick: () => downloadCsv('stock.csv', ['الصنف', 'الوحدة', 'الكمية', 'السعر', 'القيمة'],
+      items.map((i) => [i.item_name, i.unit === 'kg' ? 'وزن' : 'عدد', i.quantity, i.current_price ?? '', i.value ?? ''])),
+  }, icon('download', 16), 'تصدير'));
 
   body.append(h('div.grid.cols-4', {},
     stat('عدد الأصناف', summary.total_items),
@@ -1389,12 +1696,7 @@ async function renderStock(root) {
   }
 
   body.append(h('div.card', {},
-    h('h3', {}, 'الستوك اللحظي',
-      h('div', { style: 'flex:1' }),
-      h('button.btn.ghost.sm.no-print', {
-        onclick: () => downloadCsv('stock.csv', ['الصنف', 'الوحدة', 'الكمية', 'السعر', 'القيمة'],
-          items.map((i) => [i.item_name, i.unit === 'kg' ? 'وزن' : 'عدد', i.quantity, i.current_price ?? '', i.value ?? ''])),
-      }, 'تصدير CSV')),
+    h('h3', {}, 'كل الأصناف', h('span.sub', {}, `${items.length} صنف`)),
     table([
       { label: 'الصنف', key: 'item_name' },
       { label: 'الوحدة', render: (r) => (r.unit === 'kg' ? 'وزن' : 'عدد') },
@@ -1412,7 +1714,7 @@ function stat(label, value, danger = false) {
 }
 
 /** كشوفات الحسابات */
-async function renderStatements(root) {
+async function renderStatements(root, ctx) {
   clear(root);
   const summaryBox = h('div');
   const detailBox = h('div');
@@ -1420,7 +1722,7 @@ async function renderStatements(root) {
   let selectedEntity = null;
 
   const picker = periodPicker((p) => { params = p; refresh(); });
-  root.append(h('div.card.no-print', {}, h('h3', {}, 'الفترة'), picker), summaryBox, detailBox);
+  root.append(picker, summaryBox, detailBox);
 
   async function refresh() {
     const data = await api.get('/api/statements', params);
@@ -1504,14 +1806,14 @@ function statementCard(data) {
 }
 
 /** تقرير النقص/الفاقد */
-async function renderLoss(root) {
+async function renderLoss(root, ctx) {
   clear(root);
   const box = h('div');
   let params = { week: 0 };
   const picker = periodPicker((p) => { params = p; refresh(); });
-  root.append(h('div.card.no-print', {}, h('h3', {}, 'الفترة'), picker,
-    h('div.muted', { style: 'margin-top:6px' },
-      'التقرير بيقارن المتوقّع حسب المقادير مع الفعلي اللي رجع من المشغل.')), box);
+  root.append(picker,
+    h('div.muted', { style: 'margin:-6px 2px 16px' },
+      'التقرير بيقارن المتوقّع حسب المقادير مع الفعلي اللي رجع من المشغل.'), box);
 
   async function refresh() {
     const data = await api.get('/api/reports/loss', params);
@@ -1555,7 +1857,7 @@ async function renderLoss(root) {
 }
 
 /** سجل الحركات */
-async function renderTransactions(root, { editable = false, onEdit, onDelete } = {}) {
+async function renderTransactions(root, { editable = false, onEdit, onDelete, ctx } = {}) {
   clear(root);
   const box = h('div');
   const filters = h('div.row');
@@ -1574,7 +1876,8 @@ async function renderTransactions(root, { editable = false, onEdit, onDelete } =
     h('label.field', {}, 'نوع الحركة', kindSelect));
 
   const picker = periodPicker((p) => { params = p; refresh(); });
-  root.append(h('div.card.no-print', {}, h('h3', {}, 'فلترة'), picker, filters), box);
+  picker.append(filters);
+  root.append(picker, box);
 
   async function refresh() {
     const data = await api.get('/api/transactions', {
@@ -1607,6 +1910,71 @@ async function renderTransactions(root, { editable = false, onEdit, onDelete } =
 
   refresh();
   return { refresh };
+}
+
+/**
+ * قائمة حركات بنمط بطاقات الصفوف، مجمّعة حسب اليوم.
+ * الصف بيوسّع لتفاصيله بضغطة - نفس نمط لوحات المواعيد.
+ */
+function entryList(transactions, { onEdit, onDelete, refresh } = {}) {
+  const box = h('div');
+  if (!transactions.length) return h('div.empty', {}, 'ما في حركات');
+
+  const groups = new Map();
+  for (const t of transactions) {
+    const day = dateOnly(t.occurred_at);
+    if (!groups.has(day)) groups.set(day, []);
+    groups.get(day).push(t);
+  }
+
+  const today = todayString();
+  for (const [day, rows] of groups) {
+    const label = day === today ? 'اليوم' : dayName(rows[0].occurred_at);
+    box.append(h('div.day-group', {},
+      h('div.day-head', {}, h('b', {}, label), h('span', {}, day)),
+      rows.map((t) => entryRow(t, { onEdit, onDelete, refresh }))));
+  }
+  return box;
+}
+
+const dayName = (iso) => dateTime(iso).split(' ')[0];
+
+function entryRow(t, { onEdit, onDelete, refresh } = {}) {
+  const more = h('div.entry-more', { style: 'display:none' });
+  let open = false;
+  const toggle = h('button.link-more', {
+    onclick: () => {
+      open = !open;
+      more.style.display = open ? 'flex' : 'none';
+      row.classList.toggle('open', open);
+      toggle.textContent = open ? 'إخفاء' : 'التفاصيل';
+    },
+  }, 'التفاصيل');
+
+  const field = (k, v) => h('div.field', {}, h('span.k', {}, k), h('span.v', {}, v));
+
+  more.append(
+    t.note ? field('ملاحظة', t.note) : null,
+    t.created_by_name ? field('سجّلها', t.created_by_name) : null,
+    field('الوقت', dateTime(t.occurred_at)),
+    h('div', { style: 'flex:1' }),
+    onEdit ? h('div.row', {},
+      h('button.btn.ghost.sm', { onclick: () => onEdit(t, refresh) }, 'تعديل'),
+      h('button.btn.danger.sm', { onclick: () => onDelete(t, refresh) }, 'حذف')) : null);
+
+  const row = h('div.entry', {},
+    h('div.entry-main', {},
+      h('span.pill', { class: KIND_PILL[t.kind] || '' }, t.kind_label),
+      field('الجهة', t.entity_name || 'المستودع'),
+      t.item_name ? field('الصنف', t.item_name) : field('طريقة الدفع', METHOD_LABELS[t.method] || '—'),
+      t.quantity != null ? field('الكمية', qty(t.quantity, t.item_unit)) : null,
+      h('div.spacer'),
+      t.amount != null || t.payment_amount != null
+        ? field('المبلغ', money(t.amount ?? t.payment_amount)) : null,
+      t.price_pending ? h('span.pill.warn', {}, 'سعر معلّق') : null,
+      toggle),
+    more);
+  return row;
 }
 
 
@@ -1651,6 +2019,7 @@ function renderLogin(root, onSuccess) {
     h('div.login-card', {},
       logoImg,
       h('h1', {}, 'نظام مستودعات المفلح'),
+      h('p.tagline', {}, 'إدارة المخزون وكشوفات الحسابات'),
       form)));
 
   setTimeout(() => username.focus(), 50);
@@ -1658,45 +2027,21 @@ function renderLogin(root, onSuccess) {
 
 
 // ===== public/js/pages/admin.js =====
-const TABS = [
-  { key: 'dashboard', label: 'اللوحة', render: renderDashboard },
-  { key: 'stock', label: 'الستوك', render: renderStock },
-  { key: 'transactions', label: 'الحركات', render: renderAdminTransactions },
-  { key: 'items', label: 'الأصناف والأسعار', render: renderItems },
-  { key: 'recipes', label: 'المقادير', render: renderRecipes },
-  { key: 'statements', label: 'كشوفات الزباين', render: renderStatements },
-  { key: 'loss', label: 'النقص والفاقد', render: renderLoss },
-  { key: 'users', label: 'الحسابات', render: renderUsers },
-  { key: 'requests', label: 'طلبات الزباين', render: renderRequests },
-  { key: 'audit', label: 'سجل التدقيق', render: renderAudit },
+const ADMIN_NAV = [
+  { key: 'dashboard', label: 'اللوحة', title: 'لوحة المستودع', icon: 'dashboard', render: renderDashboard },
+  { key: 'stock', label: 'الستوك', title: 'الستوك اللحظي', icon: 'box', render: renderStock },
+  { key: 'transactions', label: 'الحركات', title: 'سجل الحركات', icon: 'list', render: renderAdminTransactions },
+  { key: 'items', label: 'الأصناف والأسعار', title: 'الأصناف والأسعار', icon: 'tag', render: renderItems },
+  { key: 'recipes', label: 'المقادير', title: 'مقادير الأصناف', icon: 'recipe', render: renderRecipes },
+  { key: 'statements', label: 'كشوفات الزباين', title: 'كشوفات الزباين', icon: 'statement', render: renderStatements },
+  { key: 'loss', label: 'النقص والفاقد', title: 'النقص والفاقد', icon: 'loss', render: renderLoss },
+  { key: 'users', label: 'الحسابات', title: 'حسابات النظام', icon: 'users', render: renderUsers },
+  { key: 'requests', label: 'طلبات الزباين', title: 'طلبات وملاحظات الزباين', icon: 'message', render: renderRequests },
+  { key: 'audit', label: 'سجل التدقيق', title: 'سجل التدقيق', icon: 'audit', render: renderAudit },
 ];
 
-function renderAdmin(root) {
-  clear(root);
-  const tabsBar = h('div.tabs');
-  const page = h('div.page');
-  root.append(tabsBar, page);
-
-  let active = 'dashboard';
-  const draw = () => {
-    clear(tabsBar);
-    for (const tab of TABS) {
-      tabsBar.append(h('button', {
-        class: active === tab.key ? 'active' : '',
-        onclick: () => { active = tab.key; draw(); },
-      }, tab.label));
-    }
-    clear(page);
-    const loading = h('div.empty', {}, 'جاري التحميل…');
-    page.append(loading);
-    Promise.resolve(TABS.find((t) => t.key === active).render(page))
-      .catch((err) => { clear(page); page.append(h('div.alert.danger', {}, err.message)); });
-  };
-  draw();
-}
-
 // ================= اللوحة =================
-async function renderDashboard(root) {
+async function renderDashboard(root, ctx) {
   clear(root);
   const [stock, statements, proposals, requests, pending] = await Promise.all([
     api.get('/api/stock'),
@@ -1723,9 +2068,9 @@ async function renderDashboard(root) {
         { label: 'المقترح', cls: 'num', render: (r) => h('b', {}, money(r.suggested_price)) },
         { label: 'من تاريخ', render: (r) => dateOnly(r.effective_from) },
         { label: '', render: (r) => h('div.row', {},
-          h('button.btn.sm', { onclick: () => acceptProposal(r) }, 'وافق'),
+          h('button.btn.sm', { onclick: () => acceptProposal(r, ctx) }, 'وافق'),
           h('button.btn.ghost.sm', {
-            onclick: async () => { await api.post(`/api/proposals/${r.id}/reject`); toast('انرفض الاقتراح'); renderAdmin(document.getElementById('page-body')); },
+            onclick: async () => { await api.post(`/api/proposals/${r.id}/reject`); toast('انرفض الاقتراح'); ctx.go('dashboard'); },
           }, 'ارفض')) },
       ], proposals.proposals)));
   }
@@ -1739,7 +2084,7 @@ async function renderDashboard(root) {
         { label: 'الصنف', key: 'item_name' },
         { label: 'الكمية', cls: 'num', render: (r) => qty(r.quantity, r.item_unit) },
         { label: '', render: (r) => h('button.btn.gold.sm', {
-          onclick: () => openPriceDialog({ id: r.item_id, name: r.item_name }, () => renderAdmin(document.getElementById('page-body'))),
+          onclick: () => openPriceDialog({ id: r.item_id, name: r.item_name }, () => ctx.go('dashboard')),
         }, 'حدّد السعر') },
       ], pending.transactions)));
   }
@@ -1752,10 +2097,19 @@ async function renderDashboard(root) {
         { label: 'الطلب', key: 'body' },
         { label: 'التاريخ', render: (r) => dateTime(r.created_at) },
         { label: '', render: (r) => h('button.btn.ghost.sm', {
-          onclick: async () => { await api.patch(`/api/requests/${r.id}`, { handled: true }); toast('تم'); renderAdmin(document.getElementById('page-body')); },
+          onclick: async () => { await api.patch(`/api/requests/${r.id}`, { handled: true }); toast('تم'); ctx.go('dashboard'); },
         }, 'تم التعامل معه') },
       ], requests.requests)));
   }
+
+  // آخر النشاط - بيعطي اللوحة معنى بدل ما تكون أرقام معلّقة بالفراغ
+  const { transactions } = await api.get('/api/transactions', { limit: 6 });
+  root.append(h('div.card', {},
+    h('h3', {}, 'آخر الحركات',
+      h('span.sub', {}, 'آخر ٦ حركات على المستودع'),
+      h('div', { style: 'flex:1' }),
+      h('button.btn.ghost.sm', { onclick: () => ctx.go('transactions') }, 'كل الحركات')),
+    entryList(transactions)));
 
   const negatives = stock.items.filter((i) => i.negative);
   if (negatives.length) {
@@ -1768,7 +2122,7 @@ async function renderDashboard(root) {
   }
 }
 
-async function acceptProposal(proposal) {
+async function acceptProposal(proposal, ctx) {
   const price = h('input', { type: 'number', step: '0.01', value: proposal.suggested_price ?? '' });
   const effective = h('input', { type: 'date', value: dateOnly(proposal.effective_from) });
   const result = await modal({
@@ -1787,12 +2141,13 @@ async function acceptProposal(proposal) {
       toast('تم تعديل السعر');
     },
   });
-  if (result) renderAdmin(document.getElementById('page-body'));
+  if (result) ctx.go('dashboard');
 }
 
 // ================= الحركات =================
-async function renderAdminTransactions(root) {
+async function renderAdminTransactions(root, ctx) {
   await renderTransactions(root, {
+    ctx,
     editable: true,
     onEdit: (txn, refresh) => openEditTransaction(txn, refresh),
     onDelete: async (txn, refresh) => {
@@ -1841,12 +2196,12 @@ function openEditTransaction(txn, refresh) {
 }
 
 // ================= الأصناف والأسعار =================
-async function renderItems(root) {
+async function renderItems(root, ctx) {
   clear(root);
   const box = h('div');
-  root.append(h('div.card.no-print', {},
-    h('h3', {}, 'الأصناف'),
-    h('button.btn', { onclick: () => openNewItem(refresh) }, '+ صنف جديد')), box);
+  ctx.actions.append(h('button.btn', { onclick: () => openNewItem(refresh) },
+    icon('plus', 16), 'صنف جديد'));
+  root.append(box);
 
   async function refresh() {
     const { items } = await api.get('/api/items', { include_inactive: 'true' });
@@ -1972,7 +2327,7 @@ function openEditItem(item, refresh) {
 }
 
 // ================= المقادير =================
-async function renderRecipes(root) {
+async function renderRecipes(root, ctx) {
   clear(root);
   const { items } = await api.get('/api/items');
   const select = h('select', { onchange: () => load(Number(select.value)) },
@@ -2046,12 +2401,12 @@ async function renderRecipes(root) {
 }
 
 // ================= الحسابات =================
-async function renderUsers(root) {
+async function renderUsers(root, ctx) {
   clear(root);
   const box = h('div');
-  root.append(h('div.card.no-print', {},
-    h('h3', {}, 'الحسابات', h('span.sub', {}, 'إنت الوحيد اللي بتشوف بيانات الدخول')),
-    h('button.btn', { onclick: () => openNewUser(refresh) }, '+ حساب جديد')), box);
+  ctx.actions.append(h('button.btn', { onclick: () => openNewUser(refresh) },
+    icon('plus', 16), 'حساب جديد'));
+  root.append(box);
 
   const ROLE_LABELS = { admin: 'مدير', recorder: 'مسجّل حركات', viewer: 'اطّلاع', customer: 'زبون' };
   let revealed = false;
@@ -2143,7 +2498,7 @@ function openEditUser(user, refresh) {
 }
 
 // ================= طلبات الزباين =================
-async function renderRequests(root) {
+async function renderRequests(root, ctx) {
   clear(root);
   const box = h('div');
   root.append(box);
@@ -2166,7 +2521,7 @@ async function renderRequests(root) {
 }
 
 // ================= سجل التدقيق =================
-async function renderAudit(root) {
+async function renderAudit(root, ctx) {
   clear(root);
   const box = h('div');
   const actionSelect = h('select', { onchange: () => refresh() },
@@ -2234,8 +2589,12 @@ const KINDS = [
   { value: 'operator_in', label: 'إدخال من المشغل', needsEntity: true, entityType: 'operator' },
 ];
 
+const RECORDER_NAV = [
+  { key: 'record', label: 'تسجيل حركة', title: 'تسجيل الحركات', icon: 'cashier', render: renderRecorder },
+];
+
 /** شاشة تسجيل الحركات - مصمّمة للآيباد (تشبه شاشة الكاشير) */
-async function renderRecorder(root) {
+async function renderRecorder(root, ctx) {
   clear(root);
 
   const ui = {
@@ -2260,17 +2619,17 @@ async function renderRecorder(root) {
   const banner = h('div', {});
 
   const layout = h('div.cashier', {},
+    alphaBar,
     h('div.cashier-main', {},
       banner,
       h('div.cashier-bar', {}, kindTabs),
       entityTabs,
       h('div.cashier-bar', {}, searchInput,
-        h('button.btn.gold', { onclick: openNewItem }, '+ صنف جديد')),
+        h('button.btn.gold', { onclick: openNewItem }, 'صنف جديد')),
       itemGrid,
-      h('div.card', { style: 'margin:0;padding:8px' },
-        h('h3', { style: 'margin:4px 8px 6px;font-size:14px' }, 'آخر الحركات اللي سجّلتها'),
-        recentBox)),
-    alphaBar);
+      h('div.card', { style: 'margin:0' },
+        h('h3', {}, 'آخر الحركات اللي سجّلتها'),
+        recentBox)));
   root.append(layout);
 
   // ---------- تحميل البيانات ----------
@@ -2561,36 +2920,13 @@ async function renderRecorder(root) {
 
 // ===== public/js/pages/overview.js =====
 /** صفحة الاطّلاع (أبو بلال) - قراءة فقط لكل الأرقام */
-const TABS_overview = [
-  { key: 'stock', label: 'الستوك', render: renderStock },
-  { key: 'statements', label: 'كشوفات الزباين', render: renderStatements },
-  { key: 'transactions', label: 'الحركات', render: (root) => renderTransactions(root) },
-  { key: 'loss', label: 'النقص والفاقد', render: renderLoss },
-  { key: 'requests', label: 'طلبات الزباين', render: renderRequests_overview },
+const OVERVIEW_NAV = [
+  { key: 'stock', label: 'الستوك', title: 'الستوك اللحظي', icon: 'box', render: renderStock },
+  { key: 'statements', label: 'كشوفات الزباين', title: 'كشوفات الزباين', icon: 'statement', render: renderStatements },
+  { key: 'transactions', label: 'الحركات', title: 'سجل الحركات', icon: 'list', render: (root, ctx) => renderTransactions(root, { ctx }) },
+  { key: 'loss', label: 'النقص والفاقد', title: 'النقص والفاقد', icon: 'loss', render: renderLoss },
+  { key: 'requests', label: 'طلبات الزباين', title: 'طلبات وملاحظات الزباين', icon: 'message', render: renderRequests_overview },
 ];
-
-function renderOverview(root) {
-  clear(root);
-  const tabsBar = h('div.tabs');
-  const page = h('div.page');
-  root.append(tabsBar, page);
-
-  let active = 'stock';
-  const draw = () => {
-    clear(tabsBar);
-    for (const tab of TABS_overview) {
-      tabsBar.append(h('button', {
-        class: active === tab.key ? 'active' : '',
-        onclick: () => { active = tab.key; draw(); },
-      }, tab.label));
-    }
-    clear(page);
-    page.append(h('div.empty', {}, 'جاري التحميل…'));
-    Promise.resolve(TABS_overview.find((t) => t.key === active).render(page))
-      .catch((err) => { clear(page); page.append(h('div.alert.danger', {}, err.message)); });
-  };
-  draw();
-}
 
 async function renderRequests_overview(root) {
   clear(root);
@@ -2608,37 +2944,38 @@ async function renderRequests_overview(root) {
 
 // ===== public/js/pages/customer.js =====
 /** صفحة الزبون - كشف حسابه هو بس + إرسال ملاحظة/طلب */
-function renderCustomer(root) {
-  clear(root);
-  const page = h('div.page');
-  root.append(page);
+const CUSTOMER_NAV = [
+  { key: 'statement', label: 'كشف حسابي', title: 'كشف حسابي', icon: 'statement', render: renderMyStatement },
+  { key: 'requests', label: 'طلباتي', title: 'ملاحظة أو طلب', icon: 'message', render: renderMyRequests },
+];
 
+function renderMyStatement(root) {
+  clear(root);
   const statementBox = h('div');
   let params = { week: 0 };
-
   const picker = periodPicker((p) => { params = p; loadStatement(); });
-
-  page.append(
-    h('div.card.no-print', {}, h('h3', {}, 'فترة الكشف'), picker),
-    statementBox,
-    requestsCard(),
-  );
+  root.append(picker, statementBox);
 
   async function loadStatement() {
     const data = await api.get(`/api/statements/${state.user.entity_id}`, params);
     clear(statementBox);
     statementBox.append(statementCard(data));
   }
-
   loadStatement();
+}
+
+function renderMyRequests(root) {
+  clear(root);
+  root.append(requestsCard());
 }
 
 function requestsCard() {
   const input = h('textarea', { rows: 3, placeholder: 'اكتب ملاحظتك أو طلبك لقصي…' });
   const listBox = h('div');
 
-  const card = h('div.card.no-print', {},
-    h('h3', {}, 'ملاحظة أو طلب'),
+  const card = h('div', {},
+    h('div.card.no-print', {},
+    h('h3', {}, 'اكتب ملاحظة أو طلب'),
     h('div.grid', {},
       input,
       h('div.row', {}, h('button.btn', {
@@ -2650,9 +2987,8 @@ function requestsCard() {
           toast('انبعت طلبك');
           loadRequests();
         },
-      }, 'إرسال'))),
-    h('h3', { style: 'margin-top:18px' }, 'طلباتي السابقة'),
-    listBox);
+      }, 'إرسال')))),
+    h('div.card', {}, h('h3', {}, 'طلباتي السابقة'), listBox));
 
   async function loadRequests() {
     const { requests } = await api.get('/api/requests');
@@ -2675,18 +3011,15 @@ const ROLE_LABELS = {
   admin: 'مدير النظام', recorder: 'مسجّل الحركات',
   viewer: 'اطّلاع', customer: 'زبون',
 };
-
-const PAGES = {
-  admin: renderAdmin,
-  recorder: renderRecorder,
-  viewer: renderOverview,
-  customer: renderCustomer,
+const NAV_BY_ROLE = {
+  admin: ADMIN_NAV, recorder: RECORDER_NAV,
+  viewer: OVERVIEW_NAV, customer: CUSTOMER_NAV,
 };
 
 /** شعار المفلح - رابط واحد ثابت والسيرفر بيختار الملف (png أو svg) */
-function logo(className = 'logo') {
-  return h('img', { class: className, src: state.logo, alt: 'المفلح' });
-}
+const logo = (className = 'logo') => h('img', { class: className, src: state.logo, alt: 'المفلح' });
+
+const initials = (name) => String(name || '').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('');
 
 async function boot() {
   try {
@@ -2696,42 +3029,141 @@ async function boot() {
   } catch {
     state.user = null;
   }
-
   if (!state.user) return renderLogin(app, boot);
   renderShell();
 }
 
 function renderShell() {
   const user = state.user;
+  const nav = NAV_BY_ROLE[user.role] || OVERVIEW_NAV;
+  let active = nav[0].key;
   clear(app);
 
-  const bellCount = h('span.bell-dot', { style: 'display:none' });
-  const bell = h('button.icon-btn', {
-    title: 'التنبيهات',
-    onclick: () => toggleNotifications(bell),
-  }, '🔔', bellCount);
+  // شاشة وحدة (عبود) ما بتستاهل سايدبار - العرض كله للشغل
+  const singleSection = nav.length === 1;
 
-  const topbar = h('div.topbar', {},
-    logo(),
-    h('div.brand', {}, h('b', {}, 'نظام مستودعات المفلح'), h('small', {}, 'إدارة المخزون وكشوفات الحسابات')),
+  // ---------- السايدبار ----------
+  const navBox = h('div.nav');
+  const brand = h('div.brand', {}, logo(),
+    h('div.brand-text', {}, h('b', {}, 'مستودعات المفلح'), h('span', {}, 'إدارة المخزون')));
+  const sidebar = singleSection ? null : h('aside.sidebar', {},
+    brand,
+    navBox,
+    h('div.spacer'),
+    h('div.sidebar-foot', {},
+      h('button', { onclick: openAccountDialog }, icon('settings'), 'حسابي'),
+      h('button', {
+        onclick: async () => { await api.logout(); location.reload(); },
+      }, icon('logout'), 'خروج')));
+
+  // ---------- الشريط العلوي ----------
+  const bellCount = h('span.bell-dot', { style: 'display:none' });
+  const bell = h('button.icon-btn', { title: 'التنبيهات', onclick: () => toggleNotifications(bell) },
+    icon('bell'), bellCount);
+
+  const searchBox = buildSearch((key) => go(key));
+
+  const topbar = h('header.topbar', {},
+    singleSection ? brand : null,
+    (user.role === 'admin' || user.role === 'viewer') ? searchBox : h('div.spacer'),
     h('div.spacer'),
     user.notifications_on ? bell : null,
-    h('button.icon-btn', { title: 'حسابي', onclick: openAccountDialog }, '⚙'),
-    h('div.who', {}, h('b', {}, user.display_name), h('span', {}, ROLE_LABELS[user.role])),
-    h('button.icon-btn', {
-      onclick: async () => { await api.logout(); location.reload(); },
-    }, 'خروج'),
-  );
+    singleSection ? h('button.icon-btn', { title: 'حسابي', onclick: openAccountDialog }, icon('settings')) : null,
+    singleSection ? h('button.icon-btn', {
+      title: 'خروج', onclick: async () => { await api.logout(); location.reload(); },
+    }, icon('logout')) : null,
+    h('div.account', {},
+      h('div.avatar', {}, initials(user.display_name)),
+      h('div.who', {}, h('b', {}, user.display_name), h('span', {}, ROLE_LABELS[user.role]))));
 
-  const body = h('div#page-body');
-  app.append(topbar, body);
+  // ---------- المحتوى ----------
+  const title = h('h1');
+  const actions = h('div.row');
+  const section = h('div');
+  const panel = h('div.panel', {},
+    h('div.page-head', {}, title, h('div.spacer'), actions), section);
 
-  (PAGES[user.role] || renderOverview)(body);
+  app.append(h('div.shell', {}, sidebar,
+    h('div.main', {}, topbar, h('div.content', {}, panel))));
+
+  function drawNav() {
+    if (singleSection) return;
+    clear(navBox);
+    for (const item of nav) {
+      navBox.append(h('button', {
+        class: active === item.key ? 'active' : '',
+        onclick: () => go(item.key),
+      }, icon(item.icon), item.label));
+    }
+  }
+
+  function go(key) {
+    const item = nav.find((n) => n.key === key);
+    if (!item) return;
+    active = key;
+    drawNav();
+    title.textContent = item.title || item.label;
+    clear(actions);
+    clear(section);
+    section.append(h('div.empty', {}, 'جاري التحميل…'));
+    Promise.resolve(item.render(section, { actions, go }))
+      .then(() => { if (section.firstChild?.classList?.contains('empty') && section.children.length > 1) section.firstChild.remove(); })
+      .catch((err) => { clear(section); section.append(h('div.alert.danger', {}, err.message)); });
+  }
+
+  go(active);
 
   if (user.notifications_on) {
     refreshBell(bellCount);
     setInterval(() => refreshBell(bellCount), 60000);
   }
+}
+
+/** بحث سريع: زبون => كشفه، صنف => صفحة الأصناف */
+function buildSearch(go) {
+  const input = h('input', { type: 'search', placeholder: 'دوّر على زبون أو صنف…', id: 'global-search' });
+  const results = h('div.notif-panel', { style: 'display:none;top:60px' });
+  let cache = null;
+
+  const close = () => { results.style.display = 'none'; };
+  const open = async () => {
+    const term = input.value.trim();
+    if (!term) return close();
+    if (!cache) {
+      const [items, entities] = await Promise.all([
+        api.get('/api/items').catch(() => ({ items: [] })),
+        api.get('/api/users/entities').catch(() => ({ entities: [] })),
+      ]);
+      cache = { items: items.items || [], entities: entities.entities || [] };
+    }
+    clear(results);
+    const customers = cache.entities.filter((e) => e.type === 'customer' && e.name.includes(term));
+    const items = cache.items.filter((i) => i.name.includes(term)).slice(0, 6);
+    if (!customers.length && !items.length) {
+      results.append(h('div.empty', {}, 'ما في نتائج'));
+    }
+    for (const c of customers) {
+      results.append(h('div.notif', {
+        style: 'cursor:pointer',
+        onclick: () => { close(); input.value = ''; go('statements'); },
+      }, h('b', {}, c.name), h('p', {}, 'كشف حساب الزبون')));
+    }
+    for (const i of items) {
+      results.append(h('div.notif', {
+        style: 'cursor:pointer',
+        onclick: () => { close(); input.value = ''; go('items'); },
+      }, h('b', {}, i.name), h('p', {}, 'صنف — الأصناف والأسعار')));
+    }
+    results.style.display = 'block';
+  };
+
+  input.addEventListener('input', open);
+  input.addEventListener('blur', () => setTimeout(close, 180));
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); input.focus(); }
+  });
+
+  return h('div.search', {}, icon('search', 16), input, results);
 }
 
 async function refreshBell(dot) {
@@ -2745,7 +3177,6 @@ async function refreshBell(dot) {
 let notifPanel = null;
 async function toggleNotifications(anchor) {
   if (notifPanel) { notifPanel.remove(); notifPanel = null; return; }
-
   const { notifications, unread } = await api.get('/api/notifications', { limit: 40 });
   const list = h('div');
 
@@ -2758,29 +3189,24 @@ async function toggleNotifications(anchor) {
           await api.post('/api/notifications/read-all');
           notifPanel.remove(); notifPanel = null;
           toast('تم تعليم الكل كمقروء');
-          document.querySelector('.bell-dot').style.display = 'none';
+          const dot = document.querySelector('.bell-dot');
+          if (dot) dot.style.display = 'none';
         },
       }, 'تعليم الكل كمقروء') : null),
     list);
 
-  if (!notifications.length) {
-    list.append(h('div.empty', {}, 'ما في تنبيهات'));
-  } else {
-    for (const n of notifications) {
-      list.append(h('div.notif', {
-        class: n.read_at ? '' : 'unread',
-        onclick: async () => { if (!n.read_at) await api.post(`/api/notifications/${n.id}/read`); },
-      },
-        h('b', {}, n.title),
-        n.body ? h('p', {}, n.body) : null,
-        h('time', {}, dateTime(n.created_at))));
-    }
+  if (!notifications.length) list.append(h('div.empty', {}, 'ما في تنبيهات'));
+  for (const n of notifications) {
+    list.append(h('div.notif', {
+      class: n.read_at ? '' : 'unread',
+      onclick: async () => { if (!n.read_at) await api.post(`/api/notifications/${n.id}/read`); },
+    }, h('b', {}, n.title), n.body ? h('p', {}, n.body) : null, h('time', {}, dateTime(n.created_at))));
   }
 
   document.body.append(notifPanel);
   setTimeout(() => {
     const onDoc = (e) => {
-      if (notifPanel && !notifPanel.contains(e.target) && e.target !== anchor) {
+      if (notifPanel && !notifPanel.contains(e.target) && !anchor.contains(e.target)) {
         notifPanel.remove(); notifPanel = null;
         document.removeEventListener('click', onDoc);
       }
@@ -2791,9 +3217,9 @@ async function toggleNotifications(anchor) {
 
 /** تغيير اليوزر/الباسورد - متاح لكل الحسابات */
 function openAccountDialog() {
-  const current = h('input', { type: 'password', placeholder: 'كلمة السر الحالية', required: true });
-  const username = h('input', { type: 'text', value: state.user.username });
-  const password = h('input', { type: 'password', placeholder: 'اتركها فاضية إذا ما بدك تغيّرها' });
+  const current = h('input', { type: 'password', id: 'cur-pass', placeholder: 'كلمة السر الحالية' });
+  const username = h('input', { type: 'text', id: 'new-user', value: state.user.username });
+  const password = h('input', { type: 'password', id: 'new-pass', placeholder: 'اتركها فاضية إذا ما بدك تغيّرها' });
 
   return modal({
     title: 'بيانات الدخول تبعي',
@@ -2801,23 +3227,21 @@ function openAccountDialog() {
     body: h('div.grid', {},
       h('label.field', {}, 'كلمة السر الحالية', current),
       h('label.field', {}, 'اسم المستخدم', username),
-      h('label.field', {}, 'كلمة سر جديدة', password)),
+      h('label.field', {}, 'كلمة سر جديدة', password),
+      h('div.alert.warn', {}, 'تغيير كلمة السر بينهي جلساتك المفتوحة على أي جهاز تاني.')),
     onConfirm: async () => {
       const payload = { current_password: current.value };
       if (username.value.trim() && username.value.trim() !== state.user.username) {
         payload.new_username = username.value.trim();
       }
       if (password.value) payload.new_password = password.value;
-      if (!payload.new_username && !payload.new_password) {
-        throw new Error('ما في شي للتعديل');
-      }
+      if (!payload.new_username && !payload.new_password) throw new Error('ما في شي للتعديل');
       await api.post('/api/auth/change-credentials', payload);
       toast('تم تحديث بيانات الدخول');
       setTimeout(() => location.reload(), 800);
     },
   });
 }
-
 
 boot();
 

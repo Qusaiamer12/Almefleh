@@ -1,47 +1,24 @@
 import { api } from '../api.js';
 import { h, clear, money, qty, dateTime, dateOnly, todayString, table, toast, modal, confirmDialog,
          inputToIso, toDateTimeInput, weekStartString } from '../ui.js';
-import { renderStock, renderStatements, renderLoss, renderTransactions, stat } from './shared.js';
+import { renderStock, renderStatements, renderLoss, renderTransactions, stat, entryList } from './shared.js';
+import { icon } from '../icons.js';
 
-const TABS = [
-  { key: 'dashboard', label: 'اللوحة', render: renderDashboard },
-  { key: 'stock', label: 'الستوك', render: renderStock },
-  { key: 'transactions', label: 'الحركات', render: renderAdminTransactions },
-  { key: 'items', label: 'الأصناف والأسعار', render: renderItems },
-  { key: 'recipes', label: 'المقادير', render: renderRecipes },
-  { key: 'statements', label: 'كشوفات الزباين', render: renderStatements },
-  { key: 'loss', label: 'النقص والفاقد', render: renderLoss },
-  { key: 'users', label: 'الحسابات', render: renderUsers },
-  { key: 'requests', label: 'طلبات الزباين', render: renderRequests },
-  { key: 'audit', label: 'سجل التدقيق', render: renderAudit },
+export const ADMIN_NAV = [
+  { key: 'dashboard', label: 'اللوحة', title: 'لوحة المستودع', icon: 'dashboard', render: renderDashboard },
+  { key: 'stock', label: 'الستوك', title: 'الستوك اللحظي', icon: 'box', render: renderStock },
+  { key: 'transactions', label: 'الحركات', title: 'سجل الحركات', icon: 'list', render: renderAdminTransactions },
+  { key: 'items', label: 'الأصناف والأسعار', title: 'الأصناف والأسعار', icon: 'tag', render: renderItems },
+  { key: 'recipes', label: 'المقادير', title: 'مقادير الأصناف', icon: 'recipe', render: renderRecipes },
+  { key: 'statements', label: 'كشوفات الزباين', title: 'كشوفات الزباين', icon: 'statement', render: renderStatements },
+  { key: 'loss', label: 'النقص والفاقد', title: 'النقص والفاقد', icon: 'loss', render: renderLoss },
+  { key: 'users', label: 'الحسابات', title: 'حسابات النظام', icon: 'users', render: renderUsers },
+  { key: 'requests', label: 'طلبات الزباين', title: 'طلبات وملاحظات الزباين', icon: 'message', render: renderRequests },
+  { key: 'audit', label: 'سجل التدقيق', title: 'سجل التدقيق', icon: 'audit', render: renderAudit },
 ];
 
-export function renderAdmin(root) {
-  clear(root);
-  const tabsBar = h('div.tabs');
-  const page = h('div.page');
-  root.append(tabsBar, page);
-
-  let active = 'dashboard';
-  const draw = () => {
-    clear(tabsBar);
-    for (const tab of TABS) {
-      tabsBar.append(h('button', {
-        class: active === tab.key ? 'active' : '',
-        onclick: () => { active = tab.key; draw(); },
-      }, tab.label));
-    }
-    clear(page);
-    const loading = h('div.empty', {}, 'جاري التحميل…');
-    page.append(loading);
-    Promise.resolve(TABS.find((t) => t.key === active).render(page))
-      .catch((err) => { clear(page); page.append(h('div.alert.danger', {}, err.message)); });
-  };
-  draw();
-}
-
 // ================= اللوحة =================
-async function renderDashboard(root) {
+async function renderDashboard(root, ctx) {
   clear(root);
   const [stock, statements, proposals, requests, pending] = await Promise.all([
     api.get('/api/stock'),
@@ -68,9 +45,9 @@ async function renderDashboard(root) {
         { label: 'المقترح', cls: 'num', render: (r) => h('b', {}, money(r.suggested_price)) },
         { label: 'من تاريخ', render: (r) => dateOnly(r.effective_from) },
         { label: '', render: (r) => h('div.row', {},
-          h('button.btn.sm', { onclick: () => acceptProposal(r) }, 'وافق'),
+          h('button.btn.sm', { onclick: () => acceptProposal(r, ctx) }, 'وافق'),
           h('button.btn.ghost.sm', {
-            onclick: async () => { await api.post(`/api/proposals/${r.id}/reject`); toast('انرفض الاقتراح'); renderAdmin(document.getElementById('page-body')); },
+            onclick: async () => { await api.post(`/api/proposals/${r.id}/reject`); toast('انرفض الاقتراح'); ctx.go('dashboard'); },
           }, 'ارفض')) },
       ], proposals.proposals)));
   }
@@ -84,7 +61,7 @@ async function renderDashboard(root) {
         { label: 'الصنف', key: 'item_name' },
         { label: 'الكمية', cls: 'num', render: (r) => qty(r.quantity, r.item_unit) },
         { label: '', render: (r) => h('button.btn.gold.sm', {
-          onclick: () => openPriceDialog({ id: r.item_id, name: r.item_name }, () => renderAdmin(document.getElementById('page-body'))),
+          onclick: () => openPriceDialog({ id: r.item_id, name: r.item_name }, () => ctx.go('dashboard')),
         }, 'حدّد السعر') },
       ], pending.transactions)));
   }
@@ -97,10 +74,19 @@ async function renderDashboard(root) {
         { label: 'الطلب', key: 'body' },
         { label: 'التاريخ', render: (r) => dateTime(r.created_at) },
         { label: '', render: (r) => h('button.btn.ghost.sm', {
-          onclick: async () => { await api.patch(`/api/requests/${r.id}`, { handled: true }); toast('تم'); renderAdmin(document.getElementById('page-body')); },
+          onclick: async () => { await api.patch(`/api/requests/${r.id}`, { handled: true }); toast('تم'); ctx.go('dashboard'); },
         }, 'تم التعامل معه') },
       ], requests.requests)));
   }
+
+  // آخر النشاط - بيعطي اللوحة معنى بدل ما تكون أرقام معلّقة بالفراغ
+  const { transactions } = await api.get('/api/transactions', { limit: 6 });
+  root.append(h('div.card', {},
+    h('h3', {}, 'آخر الحركات',
+      h('span.sub', {}, 'آخر ٦ حركات على المستودع'),
+      h('div', { style: 'flex:1' }),
+      h('button.btn.ghost.sm', { onclick: () => ctx.go('transactions') }, 'كل الحركات')),
+    entryList(transactions)));
 
   const negatives = stock.items.filter((i) => i.negative);
   if (negatives.length) {
@@ -113,7 +99,7 @@ async function renderDashboard(root) {
   }
 }
 
-async function acceptProposal(proposal) {
+async function acceptProposal(proposal, ctx) {
   const price = h('input', { type: 'number', step: '0.01', value: proposal.suggested_price ?? '' });
   const effective = h('input', { type: 'date', value: dateOnly(proposal.effective_from) });
   const result = await modal({
@@ -132,12 +118,13 @@ async function acceptProposal(proposal) {
       toast('تم تعديل السعر');
     },
   });
-  if (result) renderAdmin(document.getElementById('page-body'));
+  if (result) ctx.go('dashboard');
 }
 
 // ================= الحركات =================
-async function renderAdminTransactions(root) {
+async function renderAdminTransactions(root, ctx) {
   await renderTransactions(root, {
+    ctx,
     editable: true,
     onEdit: (txn, refresh) => openEditTransaction(txn, refresh),
     onDelete: async (txn, refresh) => {
@@ -186,12 +173,12 @@ function openEditTransaction(txn, refresh) {
 }
 
 // ================= الأصناف والأسعار =================
-async function renderItems(root) {
+async function renderItems(root, ctx) {
   clear(root);
   const box = h('div');
-  root.append(h('div.card.no-print', {},
-    h('h3', {}, 'الأصناف'),
-    h('button.btn', { onclick: () => openNewItem(refresh) }, '+ صنف جديد')), box);
+  ctx.actions.append(h('button.btn', { onclick: () => openNewItem(refresh) },
+    icon('plus', 16), 'صنف جديد'));
+  root.append(box);
 
   async function refresh() {
     const { items } = await api.get('/api/items', { include_inactive: 'true' });
@@ -317,7 +304,7 @@ function openEditItem(item, refresh) {
 }
 
 // ================= المقادير =================
-async function renderRecipes(root) {
+async function renderRecipes(root, ctx) {
   clear(root);
   const { items } = await api.get('/api/items');
   const select = h('select', { onchange: () => load(Number(select.value)) },
@@ -391,12 +378,12 @@ async function renderRecipes(root) {
 }
 
 // ================= الحسابات =================
-async function renderUsers(root) {
+async function renderUsers(root, ctx) {
   clear(root);
   const box = h('div');
-  root.append(h('div.card.no-print', {},
-    h('h3', {}, 'الحسابات', h('span.sub', {}, 'إنت الوحيد اللي بتشوف بيانات الدخول')),
-    h('button.btn', { onclick: () => openNewUser(refresh) }, '+ حساب جديد')), box);
+  ctx.actions.append(h('button.btn', { onclick: () => openNewUser(refresh) },
+    icon('plus', 16), 'حساب جديد'));
+  root.append(box);
 
   const ROLE_LABELS = { admin: 'مدير', recorder: 'مسجّل حركات', viewer: 'اطّلاع', customer: 'زبون' };
   let revealed = false;
@@ -488,7 +475,7 @@ function openEditUser(user, refresh) {
 }
 
 // ================= طلبات الزباين =================
-async function renderRequests(root) {
+async function renderRequests(root, ctx) {
   clear(root);
   const box = h('div');
   root.append(box);
@@ -511,7 +498,7 @@ async function renderRequests(root) {
 }
 
 // ================= سجل التدقيق =================
-async function renderAudit(root) {
+async function renderAudit(root, ctx) {
   clear(root);
   const box = h('div');
   const actionSelect = h('select', { onchange: () => refresh() },

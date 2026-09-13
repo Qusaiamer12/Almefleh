@@ -1,6 +1,7 @@
 // مكوّنات مشتركة بين صفحة الأدمن وصفحة الاطّلاع
 import { api } from '../api.js';
 import { h, clear, money, qty, dateTime, dateOnly, table, toast, downloadCsv, todayString, KIND_PILL, METHOD_LABELS } from '../ui.js';
+import { icon } from '../icons.js';
 
 /** شريط اختيار الفترة: أسبوعي (يبلّش السبت) أو مدى مخصّص */
 export function periodPicker(onChange) {
@@ -13,37 +14,41 @@ export function periodPicker(onChange) {
     h('label.field', {}, 'إلى', to),
     h('button.btn.sm', { onclick: () => emit() }, 'اعرض'));
 
-  const buttons = h('div.row');
+  const buttons = h('div.segment');
   const emit = () => onChange(mode === 'week' ? { week: offset } : { from: from.value, to: to.value });
 
   const setMode = (newMode, newOffset = 0) => {
     mode = newMode; offset = newOffset;
     customBox.style.display = mode === 'custom' ? 'flex' : 'none';
-    for (const b of buttons.querySelectorAll('button')) b.classList.remove('gold');
-    buttons.querySelector(`[data-key="${mode}${mode === 'week' ? offset : ''}"]`)?.classList.add('gold');
+    for (const b of buttons.querySelectorAll('button')) b.classList.remove('active');
+    buttons.querySelector(`[data-key="${mode}${mode === 'week' ? offset : ''}"]`)?.classList.add('active');
     if (mode !== 'custom') emit();
   };
 
   buttons.append(
-    h('button.btn.ghost.sm', { dataset: { key: 'week0' }, onclick: () => setMode('week', 0) }, 'هذا الأسبوع'),
-    h('button.btn.ghost.sm', { dataset: { key: 'week-1' }, onclick: () => setMode('week', -1) }, 'الأسبوع اللي فات'),
-    h('button.btn.ghost.sm', { dataset: { key: 'week-2' }, onclick: () => setMode('week', -2) }, 'قبل أسبوعين'),
-    h('button.btn.ghost.sm', { dataset: { key: 'custom' }, onclick: () => setMode('custom') }, 'فترة مخصّصة'),
+    h('button', { dataset: { key: 'week0' }, onclick: () => setMode('week', 0) }, 'هذا الأسبوع'),
+    h('button', { dataset: { key: 'week-1' }, onclick: () => setMode('week', -1) }, 'الأسبوع اللي فات'),
+    h('button', { dataset: { key: 'week-2' }, onclick: () => setMode('week', -2) }, 'قبل أسبوعين'),
+    h('button', { dataset: { key: 'custom' }, onclick: () => setMode('custom') }, 'فترة مخصّصة'),
   );
 
-  const box = h('div', {}, buttons, customBox);
+  const box = h('div.toolbar', {}, buttons, h('div.spacer'), customBox);
   setTimeout(() => setMode('week', 0), 0);
   return box;
 }
 
 /** تقرير الستوك اللحظي */
-export async function renderStock(root) {
+export async function renderStock(root, ctx) {
   clear(root);
   const body = h('div');
   root.append(body);
 
   const { items, summary } = await api.get('/api/stock');
   clear(body);
+  ctx?.actions?.append(h('button.btn.ghost.no-print', {
+    onclick: () => downloadCsv('stock.csv', ['الصنف', 'الوحدة', 'الكمية', 'السعر', 'القيمة'],
+      items.map((i) => [i.item_name, i.unit === 'kg' ? 'وزن' : 'عدد', i.quantity, i.current_price ?? '', i.value ?? ''])),
+  }, icon('download', 16), 'تصدير'));
 
   body.append(h('div.grid.cols-4', {},
     stat('عدد الأصناف', summary.total_items),
@@ -57,12 +62,7 @@ export async function renderStock(root) {
   }
 
   body.append(h('div.card', {},
-    h('h3', {}, 'الستوك اللحظي',
-      h('div', { style: 'flex:1' }),
-      h('button.btn.ghost.sm.no-print', {
-        onclick: () => downloadCsv('stock.csv', ['الصنف', 'الوحدة', 'الكمية', 'السعر', 'القيمة'],
-          items.map((i) => [i.item_name, i.unit === 'kg' ? 'وزن' : 'عدد', i.quantity, i.current_price ?? '', i.value ?? ''])),
-      }, 'تصدير CSV')),
+    h('h3', {}, 'كل الأصناف', h('span.sub', {}, `${items.length} صنف`)),
     table([
       { label: 'الصنف', key: 'item_name' },
       { label: 'الوحدة', render: (r) => (r.unit === 'kg' ? 'وزن' : 'عدد') },
@@ -80,7 +80,7 @@ function stat(label, value, danger = false) {
 }
 
 /** كشوفات الحسابات */
-export async function renderStatements(root) {
+export async function renderStatements(root, ctx) {
   clear(root);
   const summaryBox = h('div');
   const detailBox = h('div');
@@ -88,7 +88,7 @@ export async function renderStatements(root) {
   let selectedEntity = null;
 
   const picker = periodPicker((p) => { params = p; refresh(); });
-  root.append(h('div.card.no-print', {}, h('h3', {}, 'الفترة'), picker), summaryBox, detailBox);
+  root.append(picker, summaryBox, detailBox);
 
   async function refresh() {
     const data = await api.get('/api/statements', params);
@@ -172,14 +172,14 @@ export function statementCard(data) {
 }
 
 /** تقرير النقص/الفاقد */
-export async function renderLoss(root) {
+export async function renderLoss(root, ctx) {
   clear(root);
   const box = h('div');
   let params = { week: 0 };
   const picker = periodPicker((p) => { params = p; refresh(); });
-  root.append(h('div.card.no-print', {}, h('h3', {}, 'الفترة'), picker,
-    h('div.muted', { style: 'margin-top:6px' },
-      'التقرير بيقارن المتوقّع حسب المقادير مع الفعلي اللي رجع من المشغل.')), box);
+  root.append(picker,
+    h('div.muted', { style: 'margin:-6px 2px 16px' },
+      'التقرير بيقارن المتوقّع حسب المقادير مع الفعلي اللي رجع من المشغل.'), box);
 
   async function refresh() {
     const data = await api.get('/api/reports/loss', params);
@@ -223,7 +223,7 @@ export async function renderLoss(root) {
 }
 
 /** سجل الحركات */
-export async function renderTransactions(root, { editable = false, onEdit, onDelete } = {}) {
+export async function renderTransactions(root, { editable = false, onEdit, onDelete, ctx } = {}) {
   clear(root);
   const box = h('div');
   const filters = h('div.row');
@@ -242,7 +242,8 @@ export async function renderTransactions(root, { editable = false, onEdit, onDel
     h('label.field', {}, 'نوع الحركة', kindSelect));
 
   const picker = periodPicker((p) => { params = p; refresh(); });
-  root.append(h('div.card.no-print', {}, h('h3', {}, 'فلترة'), picker, filters), box);
+  picker.append(filters);
+  root.append(picker, box);
 
   async function refresh() {
     const data = await api.get('/api/transactions', {
@@ -275,6 +276,71 @@ export async function renderTransactions(root, { editable = false, onEdit, onDel
 
   refresh();
   return { refresh };
+}
+
+/**
+ * قائمة حركات بنمط بطاقات الصفوف، مجمّعة حسب اليوم.
+ * الصف بيوسّع لتفاصيله بضغطة - نفس نمط لوحات المواعيد.
+ */
+export function entryList(transactions, { onEdit, onDelete, refresh } = {}) {
+  const box = h('div');
+  if (!transactions.length) return h('div.empty', {}, 'ما في حركات');
+
+  const groups = new Map();
+  for (const t of transactions) {
+    const day = dateOnly(t.occurred_at);
+    if (!groups.has(day)) groups.set(day, []);
+    groups.get(day).push(t);
+  }
+
+  const today = todayString();
+  for (const [day, rows] of groups) {
+    const label = day === today ? 'اليوم' : dayName(rows[0].occurred_at);
+    box.append(h('div.day-group', {},
+      h('div.day-head', {}, h('b', {}, label), h('span', {}, day)),
+      rows.map((t) => entryRow(t, { onEdit, onDelete, refresh }))));
+  }
+  return box;
+}
+
+const dayName = (iso) => dateTime(iso).split(' ')[0];
+
+function entryRow(t, { onEdit, onDelete, refresh } = {}) {
+  const more = h('div.entry-more', { style: 'display:none' });
+  let open = false;
+  const toggle = h('button.link-more', {
+    onclick: () => {
+      open = !open;
+      more.style.display = open ? 'flex' : 'none';
+      row.classList.toggle('open', open);
+      toggle.textContent = open ? 'إخفاء' : 'التفاصيل';
+    },
+  }, 'التفاصيل');
+
+  const field = (k, v) => h('div.field', {}, h('span.k', {}, k), h('span.v', {}, v));
+
+  more.append(
+    t.note ? field('ملاحظة', t.note) : null,
+    t.created_by_name ? field('سجّلها', t.created_by_name) : null,
+    field('الوقت', dateTime(t.occurred_at)),
+    h('div', { style: 'flex:1' }),
+    onEdit ? h('div.row', {},
+      h('button.btn.ghost.sm', { onclick: () => onEdit(t, refresh) }, 'تعديل'),
+      h('button.btn.danger.sm', { onclick: () => onDelete(t, refresh) }, 'حذف')) : null);
+
+  const row = h('div.entry', {},
+    h('div.entry-main', {},
+      h('span.pill', { class: KIND_PILL[t.kind] || '' }, t.kind_label),
+      field('الجهة', t.entity_name || 'المستودع'),
+      t.item_name ? field('الصنف', t.item_name) : field('طريقة الدفع', METHOD_LABELS[t.method] || '—'),
+      t.quantity != null ? field('الكمية', qty(t.quantity, t.item_unit)) : null,
+      h('div.spacer'),
+      t.amount != null || t.payment_amount != null
+        ? field('المبلغ', money(t.amount ?? t.payment_amount)) : null,
+      t.price_pending ? h('span.pill.warn', {}, 'سعر معلّق') : null,
+      toggle),
+    more);
+  return row;
 }
 
 export { stat };
