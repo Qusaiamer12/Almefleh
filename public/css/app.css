@@ -451,6 +451,7 @@ input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--brand); 
 .dir.active b { color: var(--brand); }
 
 @media (max-width: 640px) {
+  .quick-qty { grid-template-columns: repeat(4, 1fr); }
   .party { min-height: 78px; padding: 14px 10px; }
   .party .party-name { font-size: 18px; }
 }
@@ -509,6 +510,28 @@ input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--brand); 
 .alpha-bar button.active { background: var(--brand); color: #fff; }
 .alpha-bar button.off { color: #B9C6C0; }
 
+.qty-label { color: var(--muted); font-size: 12px; margin: 10px 0 6px; }
+/* كميات جاهزة بضغطة - بتغطّي معظم الحالات بلا كتابة */
+.quick-qty { display: grid; grid-template-columns: repeat(6, 1fr); gap: 7px; direction: ltr; }
+.quick-qty button {
+  padding: 12px 4px; font-size: 17px; font-weight: 700;
+  border-radius: var(--r-sm); border: 1px solid var(--line-strong);
+  background: var(--brand-soft); color: var(--brand); cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.quick-qty button:hover { background: var(--brand); color: #fff; border-color: var(--brand); }
+.quick-qty button:active { transform: scale(.95); }
+
+/* شريط تأكيد: مين وشو الاتجاه وأي صنف - قبل ما يسجّل */
+.confirm-bar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  background: var(--canvas); border-radius: var(--r-sm);
+  padding: 10px 13px; margin-bottom: 14px; font-size: 14px;
+}
+.confirm-bar b { font-weight: 700; }
+
+.btn.active-supply { background: var(--brand); color: #fff; border-color: var(--brand); }
+
 .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; margin-top: 12px; direction: ltr; }
 .keypad button {
   padding: 14px; font-size: 20px; font-weight: 700;
@@ -517,7 +540,7 @@ input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--brand); 
 }
 .keypad button:hover { background: var(--canvas); border-color: var(--brand); }
 .qty-display {
-  font-size: 30px; font-weight: 800; text-align: center; padding: 14px;
+  font-size: 28px; font-weight: 800; text-align: center; padding: 14px;
   background: var(--canvas); border-radius: var(--r-md);
   border: 2px solid var(--brand); min-height: 64px;
   font-variant-numeric: tabular-nums; direction: ltr;
