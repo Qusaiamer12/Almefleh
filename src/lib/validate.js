@@ -129,4 +129,16 @@ function validateQuery(query, schema) {
   return validate(query, schema, { allowUnknown: true });
 }
 
-module.exports = { validate, validateQuery, ValidationError };
+/**
+ * معرّف من مسار الرابط (/api/items/:id).
+ * بيرمي 400 برسالة واضحة بدل ما يوصل NaN لقاعدة البيانات.
+ */
+function parseId(value, label = 'المعرّف') {
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 1) {
+    throw new ValidationError(`${label} غير صالح`, label);
+  }
+  return n;
+}
+
+module.exports = { validate, validateQuery, parseId, ValidationError };

@@ -325,7 +325,9 @@ export async function renderRecorder(root) {
   }
 
   /** تنبيه كبير وواضح لما الكمية أكتر من المتوفر */
+  let warningTimer = null;
   function showWarnings(warnings) {
+    clearTimeout(warningTimer); // مؤقّت تنبيه قديم ما لازم يمسح تنبيه جديد
     clear(banner);
     if (!warnings?.length) return;
     for (const w of warnings) {
@@ -333,7 +335,7 @@ export async function renderRecorder(root) {
         h('span', {}, '⚠'),
         h('span', {}, w.message)));
     }
-    setTimeout(() => clear(banner), 15000);
+    warningTimer = setTimeout(() => clear(banner), 15000);
   }
 
   drawKindTabs();

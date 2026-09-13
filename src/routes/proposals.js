@@ -4,7 +4,7 @@ const db = require('../db');
 const { asyncHandler } = require('../middleware/errors');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { logAudit } = require('../lib/audit');
-const { validate } = require('../lib/validate');
+const { validate, parseId } = require('../lib/validate');
 
 const router = express.Router();
 // اقتراحات تعديل الأسعار: قصي بس
@@ -31,8 +31,7 @@ const ACCEPT_SCHEMA = {
 };
 
 router.post('/:id/accept', asyncHandler(async (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'رقم اقتراح غير صالح' });
+  const id = parseId(req.params.id, 'رقم الاقتراح');
   const input = validate(req.body, ACCEPT_SCHEMA);
 
   await db.withTransaction(async (client) => {
@@ -75,7 +74,7 @@ router.post('/:id/accept', asyncHandler(async (req, res) => {
 }));
 
 router.post('/:id/reject', asyncHandler(async (req, res) => {
-  const id = Number(req.params.id);
+  const id = parseId(req.params.id, 'رقم الاقتراح');
   const { rows } = await db.query(
     `UPDATE price_proposals SET status = 'rejected', decided_by = $1, decided_at = now()
      WHERE id = $2 AND status = 'pending' RETURNING *`,

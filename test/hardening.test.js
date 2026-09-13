@@ -56,6 +56,7 @@ test.before(async () => {
   await new Promise((r) => server.once('listening', r));
   base = `http://127.0.0.1:${server.address().port}`;
   await login('admin', 'qusai', 'Admin@1234');
+  await login('recorder', 'abood', 'Pass@1234');
 });
 
 test.after(async () => {
@@ -151,11 +152,83 @@ test('رؤوس الأمان موجودة بكل رد', async () => {
   assert.ok(res.headers.get('x-request-id'), 'لازم يكون في معرّف طلب');
 });
 
+test('نقطة الصحة مستثناة من حد الطلبات', async () => {
+  // مراقبة UptimeRobot لازم ما تستهلك من حصة الطلبات
+  const health = await call('admin', 'GET', '/api/health');
+  assert.strictEqual(health.status, 200);
+  assert.strictEqual(health.headers.get('x-ratelimit-remaining'), null,
+    'نقطة الصحة لازم تتخطّى الحد قبل ما يتسجّل أي عدّاد');
+
+  const ready = await call('admin', 'GET', '/api/health/ready');
+  assert.strictEqual(ready.headers.get('x-ratelimit-remaining'), null);
+
+  // باقي النقاط محسوبة عادي
+  const stock = await call('admin', 'GET', '/api/stock');
+  assert.ok(stock.headers.get('x-ratelimit-remaining'), 'باقي الطلبات لازم تنعدّ');
+});
+
+test('كشف الزبون بيحترم الفترة المطلوبة', async () => {
+  await login('blal', 'blal', 'Pass@1234');
+  // /api/statements بيحوّل الزبون لكشفه - والفترة لازم تضل مع التحويل
+  const current = await call('blal', 'GET', '/api/statements?week=0');
+  const previous = await call('blal', 'GET', '/api/statements?week=-1');
+  assert.strictEqual(current.status, 200);
+  assert.strictEqual(previous.status, 200);
+  assert.strictEqual(current.data.period.offset, 0);
+  assert.strictEqual(previous.data.period.offset, -1,
+    'التحويل كان بيضيّع معامل الفترة ويرجّع الأسبوع الحالي دايماً');
+  assert.notStrictEqual(previous.data.period.from, current.data.period.from);
+
+  // وكمان الفترة المخصّصة
+  const custom = await call('blal', 'GET', '/api/statements?from=2026-01-01&to=2026-01-07');
+  assert.strictEqual(custom.data.period.type, 'custom');
+});
+
 test('طلب تعديل من موقع خارجي بينرفض', async () => {
   const res = await call('admin', 'POST', '/api/items',
     { name: 'صنف من موقع غريب', unit: 'piece' },
     { Origin: 'https://evil-site.example' });
   assert.strictEqual(res.status, 403);
+});
+
+test('الزبون ما بيشوف أرصدة المستودع بقائمة الأصناف', async () => {
+  // صنف برصيد وسعر عشان يكون في شي يمكن يتسرّب
+  const created = await call('admin', 'POST', '/api/items', {
+    name: 'صنف سرّية ' + Date.now(), unit: 'piece', price: 9,
+  });
+  await call('admin', 'POST', '/api/transactions', {
+    kind: 'supply', item_id: created.data.item.id, quantity: '40',
+  });
+
+  await login('blal', 'blal', 'Pass@1234');
+  const { data } = await call('blal', 'GET', '/api/items');
+  assert.ok(data.items.length > 0, 'لازم يكون في أصناف للاختبار');
+  for (const item of data.items) {
+    assert.strictEqual(item.quantity, undefined, `الزبون شاف كمية "${item.name}"`);
+    assert.strictEqual(item.current_price, undefined, `الزبون شاف سعر "${item.name}"`);
+  }
+  // وعبود كمان ما بيشوف أرقام، بس بيعرف مين بدون سعر
+  const recorder = await call('recorder', 'GET', '/api/items');
+  assert.strictEqual(recorder.data.items[0].quantity, undefined);
+  assert.ok('needs_price' in recorder.data.items[0], 'عبود لازم يعرف مين بدون سعر');
+  // وقصي بيشوف كل شي
+  const admin = await call('admin', 'GET', '/api/items');
+  assert.notStrictEqual(admin.data.items[0].quantity, undefined);
+});
+
+test('معرّف غير صالح بالمسار بيرجّع خطأ واضح مش ٥٠٠', async () => {
+  const cases = [
+    ['GET', '/api/statements/abc'],
+    ['GET', '/api/stock/xyz'],
+    ['DELETE', '/api/transactions/-1'],
+    ['PATCH', '/api/users/0'],
+    ['POST', '/api/notifications/nope/read'],
+  ];
+  for (const [method, url] of cases) {
+    const res = await call('admin', method, url, method === 'PATCH' ? { active: true } : undefined);
+    assert.strictEqual(res.status, 400, `${method} ${url} رجّع ${res.status}`);
+    assert.match(res.data.error, /غير صالح/);
+  }
 });
 
 // ================================================== التحقق من المدخلات

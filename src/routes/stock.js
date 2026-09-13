@@ -2,6 +2,7 @@
 const express = require('express');
 const db = require('../db');
 const { asyncHandler } = require('../middleware/errors');
+const { parseId } = require('../lib/validate');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { bomCost } = require('../lib/pricing');
 
@@ -35,7 +36,7 @@ router.get('/', asyncHandler(async (req, res) => {
 
 /** تفاصيل صنف واحد: رصيد + سعر + مقادير + آخر الحركات */
 router.get('/:itemId', asyncHandler(async (req, res) => {
-  const itemId = Number(req.params.itemId);
+  const itemId = parseId(req.params.itemId, 'رقم الصنف');
   const { rows } = await db.query('SELECT * FROM v_stock WHERE item_id = $1', [itemId]);
   if (!rows[0]) return res.status(404).json({ error: 'الصنف غير موجود' });
 

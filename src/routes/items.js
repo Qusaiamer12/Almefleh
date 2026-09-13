@@ -2,11 +2,11 @@
 const express = require('express');
 const db = require('../db');
 const { asyncHandler } = require('../middleware/errors');
-const { requireAuth, requireRole, canSeeMoney } = require('../middleware/auth');
+const { requireAuth, requireRole, canSeeStock } = require('../middleware/auth');
 const { logAudit, diffFields } = require('../lib/audit');
 const { notifyAdmins, TYPES } = require('../lib/notify');
 const { priceAt, bomCost, buildPriceProposals } = require('../lib/pricing');
-const { validate } = require('../lib/validate');
+const { validate, parseId } = require('../lib/validate');
 
 const NEW_ITEM_SCHEMA = {
   name: { type: 'string', required: true, minLength: 1, maxLength: 120, label: 'اسم الصنف' },
@@ -52,12 +52,14 @@ router.get('/', asyncHandler(async (req, res) => {
     params,
   );
 
-  // المسجّل (عبود) ما بيشوف ستوك ولا أسعار
-  const payload = canSeeMoney(req.user)
+  // أرصدة المستودع وأسعاره لقصي وأبو بلال بس.
+  // عبود بيسجّل بدون أرقام، والزبون بيشوف كشفه هو مش محتويات المستودع.
+  const payload = canSeeStock(req.user)
     ? rows
     : rows.map(({ quantity, current_price, ...rest }) => ({
         ...rest,
-        needs_price: current_price == null,
+        // عبود بس بيحتاج يعرف إنه الصنف بدون سعر (عشان يعرف إنه قصي لازم يسعّره)
+        ...(req.user.role === 'recorder' ? { needs_price: current_price == null } : {}),
       }));
 
   res.json({ items: payload });
@@ -121,7 +123,7 @@ router.post('/', requireRole('admin', 'recorder'), asyncHandler(async (req, res)
 
 /** تعديل صنف (الاسم/الوحدة/التفعيل) - أدمن فقط */
 router.patch('/:id', requireRole('admin'), asyncHandler(async (req, res) => {
-  const id = Number(req.params.id);
+  const id = parseId(req.params.id, 'رقم الصنف');
   const { rows: existing } = await db.query('SELECT * FROM items WHERE id = $1', [id]);
   const before = existing[0];
   if (!before) return res.status(404).json({ error: 'الصنف غير موجود' });
@@ -158,7 +160,7 @@ router.get('/:id/prices', requireRole('admin', 'viewer'), asyncHandler(async (re
     `SELECT p.*, u.display_name AS created_by_name
      FROM item_prices p LEFT JOIN users u ON u.id = p.created_by
      WHERE p.item_id = $1 ORDER BY p.effective_from DESC, p.id DESC`,
-    [Number(req.params.id)],
+    [parseId(req.params.id, 'رقم الصنف')],
   );
   res.json({ prices: rows });
 }));
@@ -169,8 +171,7 @@ router.get('/:id/prices', requireRole('admin', 'viewer'), asyncHandler(async (re
  * (لأن المبالغ مشتقّة من الـ view)، وبينبني اقتراح سعر لكل صنف بيعتمد عليه.
  */
 router.post('/:id/prices', requireRole('admin'), asyncHandler(async (req, res) => {
-  const itemId = Number(req.params.id);
-  if (!Number.isInteger(itemId) || itemId < 1) return res.status(400).json({ error: 'رقم صنف غير صالح' });
+  const itemId = parseId(req.params.id, 'رقم الصنف');
   const input = validate(req.body, PRICE_SCHEMA);
   const price = input.price;
   const effectiveFrom = input.effective_from || new Date();
@@ -245,7 +246,7 @@ router.post('/:id/prices', requireRole('admin'), asyncHandler(async (req, res) =
 router.delete('/:id/prices/:priceId', requireRole('admin'), asyncHandler(async (req, res) => {
   const { rows } = await db.query(
     'DELETE FROM item_prices WHERE id = $1 AND item_id = $2 RETURNING *',
-    [Number(req.params.priceId), Number(req.params.id)],
+    [parseId(req.params.priceId, 'رقم السعر'), parseId(req.params.id, 'رقم الصنف')],
   );
   if (!rows[0]) return res.status(404).json({ error: 'السعر غير موجود' });
   await logAudit(db, {
@@ -257,7 +258,7 @@ router.delete('/:id/prices/:priceId', requireRole('admin'), asyncHandler(async (
 
 /** وصفة الصنف (المقادير) */
 router.get('/:id/recipe', requireRole('admin', 'viewer'), asyncHandler(async (req, res) => {
-  const itemId = Number(req.params.id);
+  const itemId = parseId(req.params.id, 'رقم الصنف');
   const { rows } = await db.query(
     `SELECT ic.id, ic.component_item_id, i.name AS component_name, i.unit AS component_unit,
             ic.quantity_per_unit
@@ -278,8 +279,7 @@ router.get('/:id/recipe', requireRole('admin', 'viewer'), asyncHandler(async (re
 
 /** حفظ الوصفة كاملة (استبدال) - أدمن فقط */
 router.put('/:id/recipe', requireRole('admin'), asyncHandler(async (req, res) => {
-  const itemId = Number(req.params.id);
-  if (!Number.isInteger(itemId) || itemId < 1) return res.status(400).json({ error: 'رقم صنف غير صالح' });
+  const itemId = parseId(req.params.id, 'رقم الصنف');
   const components = Array.isArray(req.body?.components) ? req.body.components : [];
   if (components.length > 50) return res.status(400).json({ error: 'عدد المكوّنات كتير' });
 

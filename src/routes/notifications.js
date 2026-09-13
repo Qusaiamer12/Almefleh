@@ -2,6 +2,7 @@
 const express = require('express');
 const db = require('../db');
 const { asyncHandler } = require('../middleware/errors');
+const { parseId } = require('../lib/validate');
 const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
@@ -33,7 +34,7 @@ router.get('/count', asyncHandler(async (req, res) => {
 router.post('/:id/read', asyncHandler(async (req, res) => {
   await db.query(
     'UPDATE notifications SET read_at = now() WHERE id = $1 AND user_id = $2 AND read_at IS NULL',
-    [Number(req.params.id), req.user.id],
+    [parseId(req.params.id, 'رقم التنبيه'), req.user.id],
   );
   res.json({ ok: true });
 }));

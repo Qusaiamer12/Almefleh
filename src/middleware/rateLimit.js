@@ -14,7 +14,9 @@ const MAX_TRACKED_IPS = 5000;
 const hits = new Map(); // ip => {count, resetAt}
 
 function rateLimit(req, res, next) {
-  if (req.path.startsWith('/api/health')) return next(); // مراقبة UptimeRobot
+  // ملاحظة: هذا الـ middleware مركّب على '/api'، فـ req.path بيجي بدون البادئة
+  // (يعني '/health' مش '/api/health') - لازم نفحص المسار الكامل.
+  if (req.originalUrl.split('?')[0].startsWith('/api/health')) return next(); // مراقبة UptimeRobot
 
   const key = req.ip || 'unknown';
   const now = Date.now();

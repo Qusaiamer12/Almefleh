@@ -1,5 +1,6 @@
 import { api } from '../api.js';
-import { h, clear, money, qty, dateTime, dateOnly, todayString, table, toast, modal, confirmDialog } from '../ui.js';
+import { h, clear, money, qty, dateTime, dateOnly, todayString, table, toast, modal, confirmDialog,
+         inputToIso, toDateTimeInput, weekStartString } from '../ui.js';
 import { renderStock, renderStatements, renderLoss, renderTransactions, stat } from './shared.js';
 
 const TABS = [
@@ -126,7 +127,7 @@ async function acceptProposal(proposal) {
     onConfirm: async () => {
       await api.post(`/api/proposals/${proposal.id}/accept`, {
         price: Number(price.value),
-        effective_from: new Date(`${effective.value}T00:00:00`).toISOString(),
+        effective_from: inputToIso(effective.value),
       });
       toast('تم تعديل السعر');
     },
@@ -156,7 +157,7 @@ function openEditTransaction(txn, refresh) {
   const quantity = h('input', { type: 'text', value: txn.quantity_input || txn.quantity || '' });
   const amount = h('input', { type: 'text', value: txn.payment_amount ?? '' });
   const override = h('input', { type: 'number', step: '0.01', value: txn.price_overridden ? txn.unit_price : '' });
-  const when = h('input', { type: 'datetime-local', value: toLocalInput(txn.occurred_at) });
+  const when = h('input', { type: 'datetime-local', value: toDateTimeInput(txn.occurred_at) });
   const note = h('input', { type: 'text', value: txn.note || '' });
 
   return modal({
@@ -170,7 +171,7 @@ function openEditTransaction(txn, refresh) {
       h('label.field', {}, 'ملاحظة', note),
       h('div.alert.warn', {}, 'التعديل بينسجّل بسجل التدقيق وبيعيد حساب الأرصدة رجوعاً وللأمام.')),
     onConfirm: async () => {
-      const payload = { note: note.value.trim(), occurred_at: new Date(when.value).toISOString() };
+      const payload = { note: note.value.trim(), occurred_at: inputToIso(when.value) };
       if (isPayment) payload.payment_amount = amount.value.trim();
       else {
         payload.quantity = quantity.value.trim();
@@ -183,15 +184,6 @@ function openEditTransaction(txn, refresh) {
     },
   });
 }
-
-const toLocalInput = (iso) => {
-  const d = new Date(iso);
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Amman', year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', hour12: false,
-  }).formatToParts(d).reduce((a, p) => (a[p.type] = p.value, a), {});
-  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
-};
 
 // ================= الأصناف والأسعار =================
 async function renderItems(root) {
@@ -230,11 +222,7 @@ export function openPriceDialog(item, refresh) {
   const modeRow = h('div.row', {},
     h('button.btn.ghost.sm', { onclick: () => { effective.value = todayString(); update(); } }, 'من اليوم'),
     h('button.btn.ghost.sm', {
-      onclick: () => {
-        const d = new Date(); d.setDate(d.getDate() - d.getDay() - 1 + (d.getDay() === 6 ? 7 : 0));
-        effective.value = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Amman' }).format(d);
-        update();
-      },
+      onclick: () => { effective.value = weekStartString(); update(); },
     }, 'من بداية الأسبوع'));
 
   const update = () => {
@@ -256,7 +244,7 @@ export function openPriceDialog(item, refresh) {
       if (price.value === '') throw new Error('أدخل السعر');
       const result = await api.post(`/api/items/${item.id}/prices`, {
         price: Number(price.value),
-        effective_from: new Date(`${effective.value}T00:00:00`).toISOString(),
+        effective_from: inputToIso(effective.value),
         note: note.value.trim() || undefined,
       });
       let message = `تم. ${result.affected_transactions} حركة تحدّثت.`;

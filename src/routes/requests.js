@@ -2,6 +2,7 @@
 const express = require('express');
 const db = require('../db');
 const { asyncHandler } = require('../middleware/errors');
+const { parseId } = require('../lib/validate');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { notifyAdmins, TYPES } = require('../lib/notify');
 const { logAudit } = require('../lib/audit');
@@ -64,7 +65,7 @@ router.patch('/:id', requireRole('admin'), asyncHandler(async (req, res) => {
     `UPDATE customer_requests
      SET handled = $1, handled_by = $2, handled_at = CASE WHEN $1 THEN now() ELSE NULL END
      WHERE id = $3 RETURNING *`,
-    [handled, req.user.id, Number(req.params.id)],
+    [handled, req.user.id, parseId(req.params.id, 'رقم الطلب')],
   );
   if (!rows[0]) return res.status(404).json({ error: 'الطلب غير موجود' });
   await logAudit(db, {

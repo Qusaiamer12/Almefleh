@@ -5,7 +5,7 @@ const { asyncHandler } = require('../middleware/errors');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { hashPassword, encryptSecret, decryptSecret, validatePassword } = require('../lib/crypto');
 const { logAudit, diffFields } = require('../lib/audit');
-const { validate } = require('../lib/validate');
+const { validate, parseId } = require('../lib/validate');
 
 const ROLES = ['admin', 'recorder', 'viewer', 'customer'];
 
@@ -91,7 +91,7 @@ router.post('/', requireRole('admin'), asyncHandler(async (req, res) => {
 }));
 
 router.patch('/:id', requireRole('admin'), asyncHandler(async (req, res) => {
-  const id = Number(req.params.id);
+  const id = parseId(req.params.id, 'رقم الحساب');
   const { rows: existing } = await db.query('SELECT * FROM users WHERE id = $1', [id]);
   const before = existing[0];
   if (!before) return res.status(404).json({ error: 'الحساب غير موجود' });
@@ -151,7 +151,7 @@ router.patch('/:id', requireRole('admin'), asyncHandler(async (req, res) => {
 
 /** فك قفل حساب انقفل بسبب محاولات دخول فاشلة */
 router.post('/:id/unlock', requireRole('admin'), asyncHandler(async (req, res) => {
-  const id = Number(req.params.id);
+  const id = parseId(req.params.id, 'رقم الحساب');
   const { rows } = await db.query(
     'UPDATE users SET locked_until = NULL WHERE id = $1 RETURNING id, display_name', [id],
   );

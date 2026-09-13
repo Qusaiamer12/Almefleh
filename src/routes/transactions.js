@@ -6,7 +6,7 @@ const { requireAuth, requireRole, canSeeMoney, redactTransaction } = require('..
 const { logAudit, diffFields } = require('../lib/audit');
 const { notifyAll, notifyAdmins, TYPES } = require('../lib/notify');
 const { parseQuantity, parseAmount, formatQuantity } = require('../lib/quantity');
-const { validate } = require('../lib/validate');
+const { validate, parseId } = require('../lib/validate');
 const dates = require('../lib/dates');
 const { resolvePeriod, hasPeriod } = require('../lib/period');
 
@@ -276,8 +276,7 @@ router.post('/', requireRole('admin', 'recorder'), asyncHandler(async (req, res)
 
 /** تعديل حركة - بيعيد حساب كل التوتالات تلقائياً */
 router.patch('/:id', requireRole('admin', 'recorder'), asyncHandler(async (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'رقم حركة غير صالح' });
+  const id = parseId(req.params.id, 'رقم الحركة');
   const input = validate(req.body, TXN_PATCH_SCHEMA);
 
   const result = await db.withTransaction(async (client) => {
@@ -343,8 +342,7 @@ router.patch('/:id', requireRole('admin', 'recorder'), asyncHandler(async (req, 
 
 /** حذف حركة (حذف ناعم) - التوتالات بترجع تلقائياً */
 router.delete('/:id', requireRole('admin', 'recorder'), asyncHandler(async (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'رقم حركة غير صالح' });
+  const id = parseId(req.params.id, 'رقم الحركة');
 
   await db.withTransaction(async (client) => {
     // قفل السطر أول، وبعدين اقرأ - بيمنع حذفين متزامنين لنفس الحركة

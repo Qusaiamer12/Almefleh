@@ -90,6 +90,14 @@ function canSeeMoney(user) {
   return user && (user.role === 'admin' || user.role === 'viewer' || user.role === 'customer');
 }
 
+/**
+ * مين بيشوف أرصدة المستودع: قصي وأبو بلال بس.
+ * الزبون بيشوف حسابه هو، مش كميات المستودع - وعبود ما بيشوف أرقام أصلاً.
+ */
+function canSeeStock(user) {
+  return user && (user.role === 'admin' || user.role === 'viewer');
+}
+
 /** إخفاء الأرقام المالية عن المسجّل (عبود) */
 function redactTransaction(txn, user) {
   if (canSeeMoney(user)) return txn;
@@ -99,5 +107,5 @@ function redactTransaction(txn, user) {
 
 module.exports = {
   COOKIE_NAME, signToken, setAuthCookie, clearAuthCookie,
-  loadUser, requireAuth, requireRole, canSeeMoney, redactTransaction,
+  loadUser, requireAuth, requireRole, canSeeMoney, canSeeStock, redactTransaction,
 };

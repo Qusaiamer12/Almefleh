@@ -166,7 +166,7 @@ export function statementCard(data) {
       footer: h('tr', {},
         h('td', { colspan: 5 }, 'الرصيد الختامي'),
         h('td.num', {}, money(data.totals.withdrawals)),
-        h('td.num', {}, money(data.totals.payments + data.totals.returns)),
+        h('td.num', {}, money(Math.round((data.totals.payments + data.totals.returns) * 100) / 100)),
         h('td.num', {}, money(data.closing_balance)), h('td')),
     }));
 }

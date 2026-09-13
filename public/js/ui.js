@@ -74,6 +74,65 @@ export function dateOnly(value) {
 /** اليوم بصيغة YYYY-MM-DD بتوقيت المستودع */
 export const todayString = () => new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(new Date());
 
+// ===== تحويل التواريخ بتوقيت المستودع =====
+// كل تاريخ بيدخله المستخدم بينقرأ بتوقيت المستودع (عمّان)، مش بتوقيت جهازه.
+// بدون هاد، آيباد مضبوط على توقيت تاني بيزيح الحركة ساعات - وقرب منتصف
+// الليل بتنتقل ليوم تاني، يعني أسبوع تاني بالكشف.
+
+const pad2 = (n) => String(n).padStart(2, '0');
+
+function ammanParts(date) {
+  const p = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).formatToParts(date).reduce((a, x) => (a[x.type] = x.value, a), {});
+  return {
+    year: +p.year, month: +p.month, day: +p.day,
+    hour: +p.hour % 24, minute: +p.minute, second: +p.second,
+  };
+}
+
+function tzOffsetMs(date) {
+  const p = ammanParts(date);
+  return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second)
+    - Math.floor(date.getTime() / 1000) * 1000;
+}
+
+/** وقت محلي بتوقيت المستودع => لحظة UTC */
+function ammanToUtc(year, month, day, hour = 0, minute = 0) {
+  const guess = Date.UTC(year, month - 1, day, hour, minute, 0);
+  let offset = tzOffsetMs(new Date(guess));
+  offset = tzOffsetMs(new Date(guess - offset)); // تصحيح لحواف التوقيت الصيفي
+  return new Date(guess - offset);
+}
+
+/**
+ * قيمة خانة تاريخ ("YYYY-MM-DD") أو تاريخ ووقت ("YYYY-MM-DDTHH:MM")
+ * => ISO، مقروءة بتوقيت المستودع.
+ */
+export function inputToIso(value) {
+  const [datePart, timePart] = String(value || '').split('T');
+  const [year, month, day] = String(datePart).split('-').map(Number);
+  if (!year || !month || !day) throw new Error('تاريخ غير صالح');
+  const [hour, minute] = String(timePart || '00:00').split(':').map(Number);
+  return ammanToUtc(year, month, day, hour || 0, minute || 0).toISOString();
+}
+
+/** ISO => "YYYY-MM-DDTHH:MM" لخانة datetime-local بتوقيت المستودع */
+export function toDateTimeInput(iso) {
+  const p = ammanParts(new Date(iso));
+  return `${p.year}-${pad2(p.month)}-${pad2(p.day)}T${pad2(p.hour)}:${pad2(p.minute)}`;
+}
+
+/** "YYYY-MM-DD" لسبت بداية الأسبوع الحالي بتوقيت المستودع */
+export function weekStartString(date = new Date()) {
+  const p = ammanParts(date);
+  const dow = new Date(Date.UTC(p.year, p.month - 1, p.day)).getUTCDay(); // 6 = السبت
+  const back = (dow - 6 + 7) % 7;
+  const start = new Date(Date.UTC(p.year, p.month - 1, p.day - back));
+  return `${start.getUTCFullYear()}-${pad2(start.getUTCMonth() + 1)}-${pad2(start.getUTCDate())}`;
+}
+
 export function toast(message, isError = false) {
   const box = document.getElementById('toasts');
   const el = h('div.toast', { class: isError ? 'err' : '' }, message);

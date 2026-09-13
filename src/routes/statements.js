@@ -2,6 +2,7 @@
 const express = require('express');
 const db = require('../db');
 const { asyncHandler } = require('../middleware/errors');
+const { parseId } = require('../lib/validate');
 const { requireAuth } = require('../middleware/auth');
 const { resolvePeriod } = require('../lib/period');
 const { KIND_LABELS } = require('./transactions');
@@ -22,7 +23,10 @@ function assertAccess(user, entityId) {
 /** ملخّص أرصدة كل الزباين */
 router.get('/', asyncHandler(async (req, res) => {
   if (req.user.role === 'customer') {
-    return res.redirect(`/api/statements/${req.user.entity_id}`);
+    // تحويل مباشر كان بيضيّع معاملات الفترة (?week=-1 وغيرها)،
+    // فبنبني الرابط من جديد مع نفس المعاملات.
+    const query = new URLSearchParams(req.query).toString();
+    return res.redirect(`/api/statements/${req.user.entity_id}${query ? '?' + query : ''}`);
   }
   if (req.user.role === 'recorder') {
     return res.status(403).json({ error: 'ما عندك صلاحية تشوف الأرصدة' });
@@ -57,7 +61,7 @@ router.get('/', asyncHandler(async (req, res) => {
 
 /** كشف حساب جهة لفترة (أسبوعي افتراضياً، أو أي فترة مخصّصة) */
 router.get('/:entityId', asyncHandler(async (req, res) => {
-  const entityId = Number(req.params.entityId);
+  const entityId = parseId(req.params.entityId, 'رقم الجهة');
   assertAccess(req.user, entityId);
 
   const { rows: entityRows } = await db.query('SELECT * FROM entities WHERE id = $1', [entityId]);

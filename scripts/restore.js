@@ -13,6 +13,9 @@ const path = require('path');
 const db = require('../src/db');
 const { verifyDump, TABLES } = require('../src/jobs/backup');
 
+// جداول بتنحفظ بالنسخة للتوثيق بس ما بتنسترجع
+const SKIP_ON_RESTORE = new Set(['schema_migrations']);
+
 /** الأعمدة الموجودة فعلياً بالجدول - عشان نتعامل مع نسخ من إصدار أقدم */
 async function tableColumns(client, table) {
   const { rows } = await client.query(
@@ -38,6 +41,10 @@ async function restore(filePath, { dryRun = true, log = console.log } = {}) {
   }
 
   log(`✔ النسخة سليمة (${dump.meta.generated_at})`);
+  const backupMigrations = (dump.data.schema_migrations || []).length;
+  if (backupMigrations) {
+    log(`  (النسخة مأخوذة على ${backupMigrations} ترحيل - سجل الترحيلات الحالي ما بينلمس)`);
+  }
   log('  المحتوى: ' + Object.entries(dump.meta.row_counts)
     .filter(([, v]) => v > 0).map(([k, v]) => `${k}=${v}`).join('، '));
 
@@ -48,8 +55,10 @@ async function restore(filePath, { dryRun = true, log = console.log } = {}) {
 
   const restored = {};
   await db.withTransaction(async (client) => {
-    // الترتيب معكوس للمسح (الأبناء قبل الآباء)
-    const order = TABLES.filter((t) => t in dump.data);
+    // الاسترجاع بيرجّع *البيانات*، مش المخطّط. سجل الترحيلات بيوصف حالة
+    // المخطّط الحالي بالقاعدة، فلو رجّعناه من نسخة قديمة النظام بيظن إنه
+    // في ترحيلات معلّقة وهي مطبّقة أصلاً. منتركه زي ما هو.
+    const order = TABLES.filter((t) => t in dump.data && !SKIP_ON_RESTORE.has(t));
     for (const table of [...order].reverse()) {
       // سجل التدقيق محمي بـ trigger - نوقفه مؤقتاً داخل هالـ transaction
       if (table === 'audit_log') await client.query('ALTER TABLE audit_log DISABLE TRIGGER USER');
