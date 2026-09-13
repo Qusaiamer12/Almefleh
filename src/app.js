@@ -91,6 +91,7 @@ app.use(loadUser);
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/items', require('./routes/items'));
 app.use('/api/transactions', require('./routes/transactions').router);
+app.use('/api/vouchers', require('./routes/vouchers'));
 app.use('/api/stock', require('./routes/stock'));
 app.use('/api/statements', require('./routes/statements'));
 app.use('/api/reports', require('./routes/reports'));

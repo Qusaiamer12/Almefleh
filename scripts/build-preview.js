@@ -105,11 +105,11 @@ ${css}
 /* ===== شريط النسخة التجريبية ===== */
 .demo-bar {
   position: fixed; bottom: 0; inset-inline: 0; z-index: 100;
-  background: var(--green-900); color: #fff; padding: 8px 14px;
+  background: var(--brand-deep); color: #fff; padding: 8px 14px;
   display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
-  font-size: 13px; border-top: 2px solid var(--gold-500);
+  font-size: 13px; border-top: 2px solid var(--gold);
 }
-.demo-bar b { color: var(--gold-400); }
+.demo-bar b { color: var(--gold); }
 .demo-bar code {
   background: rgba(255,255,255,.12); padding: 2px 7px; border-radius: 6px;
   font-family: inherit; cursor: pointer; border: 1px solid rgba(255,255,255,.18);
@@ -117,10 +117,15 @@ ${css}
 .demo-bar code:hover { background: rgba(255,255,255,.25); }
 .demo-bar .grow { flex: 1; }
 .demo-bar button {
-  background: var(--gold-500); color: var(--green-900); border: none;
+  background: var(--gold); color: var(--brand-deep); border: none;
   border-radius: 7px; padding: 5px 12px; cursor: pointer; font-weight: 700;
 }
 body { padding-bottom: 46px; }
+/* شريط السند بيقعد فوق شريط النسخة التجريبية (بالنظام الحقيقي ما في شريط تجريبي) */
+.voucher-bar { inset-block-end: 46px; }
+body.has-voucher-bar .content { padding-bottom: 158px; }
+#toasts { inset-block-end: 62px; }
+body.has-voucher-bar #toasts { inset-block-end: 138px; }
 @media (max-width: 720px) { .demo-bar { font-size: 12px; } }
 </style>
 

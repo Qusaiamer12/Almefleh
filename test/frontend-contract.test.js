@@ -98,3 +98,18 @@ test('كل مسار بتنده عليه الواجهة إله راوتر بال�
   }
   assert.deepStrictEqual(missing, [], `مسارات بلا معالج:\n  ${missing.join('\n  ')}`);
 });
+
+test('النسخة التجريبية بتغطّي كل مسار بتناديه الواجهة', () => {
+  const mock = read(path.join(__dirname, '..', 'preview', 'mock-api.js'));
+  const missing = new Set();
+  for (const file of allFiles()) {
+    for (const m of read(file).matchAll(/api\.(get|post|patch|put|del)\(\s*[`'"]([^`'"]+)/g)) {
+      const url = m[2].split('?')[0];
+      // المقطع الأول بعد /api - إذا السيرفر الوهمي ما بيعرفه، الشاشة بتوقع بالنسخة التجريبية
+      const resource = url.split('/')[2];
+      if (resource && !mock.includes(`/api/${resource}`)) missing.add(`${rel(file)}: /api/${resource}`);
+    }
+  }
+  assert.deepStrictEqual([...missing], [],
+    `مسارات ما إلها مقابل بالنسخة التجريبية:\n  ${[...missing].join('\n  ')}`);
+});

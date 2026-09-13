@@ -412,3 +412,174 @@ test('طلب الزبون بيوصل الأدمن كتنبيه', async () => {
   const notifs = await call('admin', 'GET', '/api/notifications');
   assert.ok(notifs.data.notifications.some((n) => n.type === 'customer_request'));
 });
+
+// ---------------------------------------------------------------- السندات
+test('سند واحد فيه أكتر من صنف: بينحفظ كله وبيطلع بجرد كامل', async () => {
+  const { data: ents } = await call('admin', 'GET', '/api/users/entities');
+  const islamId = ents.entities.find((e) => e.name === 'إسلام').id;
+
+  const a = await call('admin', 'POST', '/api/items', { name: 'زيت زيتون تنكة', unit: 'piece', price: 90 });
+  const b = await call('admin', 'POST', '/api/items', { name: 'مكدوس كبير', unit: 'piece', price: 12 });
+  const c = await call('admin', 'POST', '/api/items', { name: 'زعتر بلدي', unit: 'kg', price: 4 });
+  const ids = [a, b, c].map((r) => r.data.item.id);
+
+  for (const id of ids) {
+    await call('recorder', 'POST', '/api/transactions', { kind: 'supply', item_id: id, quantity: '200' });
+  }
+
+  const { data: sheetBefore } = await call('admin', 'GET', `/api/statements/${islamId}`);
+  const withdrawnBefore = Number(sheetBefore.totals.withdrawals);
+
+  const res = await call('recorder', 'POST', '/api/vouchers', {
+    kind: 'customer_out',
+    entity_id: islamId,
+    note: 'طلبية الخميس',
+    client_token: 'voucher-test-token-1',
+    lines: [
+      { item_id: ids[0], quantity: '3' },
+      { item_id: ids[1], quantity: '10' },
+      { item_id: ids[2], quantity: '2ك500غ' },
+    ],
+  });
+
+  assert.strictEqual(res.status, 201);
+  assert.strictEqual(res.data.lines.length, 3);
+  assert.ok(Number(res.data.voucher.voucher_no) >= 1000, 'السند لازم ياخد رقم');
+  assert.strictEqual(res.data.voucher.line_count, 3);
+  // عبود ما بيشوف فلوس - لا بملخّص السند ولا بأسطره
+  assert.strictEqual(res.data.voucher.total_amount, undefined);
+  assert.strictEqual(res.data.lines[0].amount, undefined);
+
+  // كل سطر صار حركة عادية: الستوك بينزل والدين بيزيد بلا منطق جديد
+  const { data: stock } = await call('admin', 'GET', '/api/stock');
+  assert.strictEqual(Number(stock.items.find((i) => i.item_id === ids[0]).quantity), 197);
+  assert.strictEqual(Number(stock.items.find((i) => i.item_id === ids[2]).quantity), 197.5);
+
+  // 3×90 + 10×12 + 2.5×4 = 400
+  const { data: sheet } = await call('admin', 'GET', `/api/statements/${islamId}`);
+  assert.strictEqual(Number(sheet.totals.withdrawals) - withdrawnBefore, 400);
+
+  // الأدمن بيشوف الجرد بالمبالغ
+  const one = await call('admin', 'GET', `/api/vouchers/${res.data.voucher.id}`);
+  assert.strictEqual(Number(one.data.voucher.total_amount), 400);
+  assert.strictEqual(one.data.lines.length, 3);
+});
+
+test('السند كله أو ولا شي: سطر غلط بيلغي السند كامل', async () => {
+  const { data: ents } = await call('admin', 'GET', '/api/users/entities');
+  const islamId = ents.entities.find((e) => e.name === 'إسلام').id;
+  const { data: before } = await call('admin', 'GET', '/api/vouchers');
+
+  const res = await call('recorder', 'POST', '/api/vouchers', {
+    kind: 'customer_out',
+    entity_id: islamId,
+    lines: [
+      { item_id: 1, quantity: '5' },
+      { item_id: 999999, quantity: '5' },  // صنف مش موجود
+    ],
+  });
+  assert.strictEqual(res.status, 400);
+
+  const { data: after } = await call('admin', 'GET', '/api/vouchers');
+  assert.strictEqual(after.vouchers.length, before.vouchers.length, 'ما لازم ينحفظ نص سند');
+});
+
+test('نفس رمز الطلب ما بيثبّت السند مرتين', async () => {
+  const { data: ents } = await call('admin', 'GET', '/api/users/entities');
+  const islamId = ents.entities.find((e) => e.name === 'إسلام').id;
+  const body = {
+    kind: 'customer_out', entity_id: islamId, client_token: 'voucher-dup-token-9',
+    lines: [{ item_id: 1, quantity: '1' }],
+  };
+  const first = await call('recorder', 'POST', '/api/vouchers', body);
+  const second = await call('recorder', 'POST', '/api/vouchers', body);
+  assert.strictEqual(first.status, 201);
+  assert.strictEqual(second.status, 200);
+  assert.strictEqual(second.data.duplicate, true);
+  assert.strictEqual(second.data.voucher.id, first.data.voucher.id);
+});
+
+test('حذف السند بيشيل كل أسطره والرصيد بيرجع لمحلّه', async () => {
+  const { data: ents } = await call('admin', 'GET', '/api/users/entities');
+  const saadId = ents.entities.find((e) => e.name === 'سعد').id;
+  const item = await call('admin', 'POST', '/api/items', { name: 'لبنة بلدية', unit: 'piece', price: 5 });
+  const itemId = item.data.item.id;
+  await call('recorder', 'POST', '/api/transactions', { kind: 'supply', item_id: itemId, quantity: '100' });
+
+  const { data: saadBefore } = await call('admin', 'GET', `/api/statements/${saadId}`);
+  const balanceBefore = Number(saadBefore.closing_balance);
+
+  const res = await call('recorder', 'POST', '/api/vouchers', {
+    kind: 'customer_out', entity_id: saadId,
+    lines: [{ item_id: itemId, quantity: '4' }, { item_id: itemId, quantity: '6' }],
+  });
+  assert.strictEqual(res.status, 201);
+
+  const { data: mid } = await call('admin', 'GET', `/api/statements/${saadId}`);
+  assert.strictEqual(Number(mid.closing_balance), balanceBefore + 50);
+
+  const del = await call('recorder', 'DELETE', `/api/vouchers/${res.data.voucher.id}`);
+  assert.strictEqual(del.status, 200);
+  assert.strictEqual(del.data.line_count, 2);
+
+  const { data: afterSheet } = await call('admin', 'GET', `/api/statements/${saadId}`);
+  assert.strictEqual(Number(afterSheet.closing_balance), balanceBefore);
+
+  const { data: stock } = await call('admin', 'GET', '/api/stock');
+  assert.strictEqual(Number(stock.items.find((i) => i.item_id === itemId).quantity), 100);
+
+  // وما بينحذف مرتين
+  assert.strictEqual((await call('recorder', 'DELETE', `/api/vouchers/${res.data.voucher.id}`)).status, 404);
+});
+
+test('السندات للبضاعة بس - الدفعات ما إلها سندات', async () => {
+  const { data: ents } = await call('admin', 'GET', '/api/users/entities');
+  const blalId = ents.entities.find((e) => e.name === 'بلال').id;
+  const res = await call('admin', 'POST', '/api/vouchers', {
+    kind: 'payment', entity_id: blalId,
+    lines: [{ item_id: 1, quantity: '1' }],
+  });
+  assert.strictEqual(res.status, 400);
+});
+
+test('سند بلا أسطر بينرفض', async () => {
+  const { data: ents } = await call('admin', 'GET', '/api/users/entities');
+  const blalId = ents.entities.find((e) => e.name === 'بلال').id;
+  const empty = await call('recorder', 'POST', '/api/vouchers', {
+    kind: 'customer_out', entity_id: blalId, lines: [],
+  });
+  assert.strictEqual(empty.status, 400);
+  const missing = await call('recorder', 'POST', '/api/vouchers', { kind: 'customer_out', entity_id: blalId });
+  assert.strictEqual(missing.status, 400);
+});
+
+test('سطر السند ما بينفع ينتقل لجهة ثانية', async () => {
+  const { data: ents } = await call('admin', 'GET', '/api/users/entities');
+  const blalId = ents.entities.find((e) => e.name === 'بلال').id;
+  const islamId = ents.entities.find((e) => e.name === 'إسلام').id;
+  const res = await call('recorder', 'POST', '/api/vouchers', {
+    kind: 'customer_out', entity_id: blalId, lines: [{ item_id: 1, quantity: '1' }],
+  });
+  const lineId = res.data.lines[0].id;
+  const moved = await call('admin', 'PATCH', `/api/transactions/${lineId}`, { entity_id: islamId });
+  assert.strictEqual(moved.status, 400);
+  assert.match(moved.data.error, /سطر السند/);
+
+  // بس تعديل الكمية بينفع عادي
+  const qtyEdit = await call('recorder', 'PATCH', `/api/transactions/${lineId}`, { quantity: '2' });
+  assert.strictEqual(qtyEdit.status, 200);
+});
+
+test('الزبون بيشوف سنداته هو بس', async () => {
+  const { data: ents } = await call('admin', 'GET', '/api/users/entities');
+  const blalId = ents.entities.find((e) => e.name === 'بلال').id;
+  const { data: all } = await call('admin', 'GET', '/api/vouchers');
+  const blalVoucher = all.vouchers.find((v) => v.entity_id === blalId);
+  const otherVoucher = all.vouchers.find((v) => v.entity_id && v.entity_id !== blalId);
+
+  assert.strictEqual((await call('blal', 'GET', `/api/vouchers/${blalVoucher.id}`)).status, 200);
+  assert.strictEqual((await call('blal', 'GET', `/api/vouchers/${otherVoucher.id}`)).status, 403);
+
+  const { data: mine } = await call('blal', 'GET', '/api/vouchers');
+  assert.ok(mine.vouchers.every((v) => v.entity_id === blalId));
+});

@@ -227,6 +227,7 @@ a:hover { text-decoration: underline; }
 .btn.danger { background: var(--panel); color: var(--danger); border-color: #F0CFC9; box-shadow: none; }
 .btn.danger:hover { background: var(--danger-soft); }
 .btn.sm { padding: 6px 13px; font-size: 12.5px; }
+.btn.lg { padding: 13px 26px; font-size: 15.5px; font-weight: 700; }
 
 /* ==========================================================================
    البطاقات والأرقام
@@ -339,7 +340,9 @@ tfoot td { font-weight: 700; background: var(--canvas); border-top: 1px solid va
 .alert.big { font-size: 16px; padding: 18px; display: flex; gap: 12px; align-items: center; }
 .alert.big span:first-child { font-size: 22px; }
 
-#toasts { position: fixed; bottom: 20px; inset-inline-end: 20px; z-index: 90; display: grid; gap: 8px; }
+#toasts { position: fixed; inset-block-end: 20px; inset-inline-end: 20px; z-index: 90; display: grid; gap: 8px; }
+/* شريط السند بياخد تحت الصفحة - التنبيهات بتطلع فوقه */
+body.has-voucher-bar #toasts { inset-block-end: 92px; }
 .toast {
   background: var(--brand-deep); color: #fff; padding: 12px 17px;
   border-radius: var(--r-md); box-shadow: var(--shadow-lg); max-width: 380px;
@@ -496,6 +499,15 @@ input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--brand); 
 .crumb b { font-family: var(--font-display); font-size: 15px; }
 .item-tile:active { transform: scale(.98); }
 .item-tile small { font-weight: 500; color: var(--muted); font-size: 11.5px; }
+/* صنف موجود بالسند المفتوح: باين من البلاطة بلا ما يفتحها */
+.item-tile { position: relative; }
+.item-tile.picked { border-color: var(--brand); background: var(--brand-soft); }
+.tile-badge {
+  position: absolute; inset-block-start: 6px; inset-inline-end: 6px;
+  min-width: 21px; height: 21px; padding: 0 5px; border-radius: var(--r-pill);
+  background: var(--brand); color: #fff; font-size: 12px; font-weight: 700;
+  display: grid; place-items: center; font-variant-numeric: tabular-nums;
+}
 
 .alpha-bar {
   display: flex; flex-direction: column; gap: 1px; overflow-y: auto;
@@ -554,6 +566,67 @@ input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--brand); 
   background: var(--canvas); border-radius: var(--r-sm);
 }
 .recent-row .grow { flex: 1; min-width: 0; }
+/* رقم السند: بيربط أسطر السند ببعضها بكل الشاشات */
+.voucher-no {
+  display: inline-block; font-weight: 700; color: var(--brand);
+  font-variant-numeric: tabular-nums; direction: ltr;
+  background: var(--brand-soft); border-radius: var(--r-pill); padding: 3px 10px; font-size: 12.5px;
+}
+
+/* ==========================================================================
+   السند: شريط ثابت تحت + الجرد الكلي قبل التثبيت
+   ========================================================================== */
+/* مساحة تحت عشان الشريط الثابت ما يغطّي آخر الصفحة */
+body.has-voucher-bar .content { padding-bottom: 112px; }
+.voucher-bar {
+  position: fixed; inset-inline: 0; inset-block-end: 0; z-index: 60;
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 13px clamp(16px, 4vw, 34px);
+  background: var(--brand-deep); color: #fff;
+  box-shadow: 0 -10px 30px rgba(10, 51, 37, .28);
+}
+.voucher-bar-info { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 200px; }
+.voucher-bar-info b { display: block; font-family: var(--font-display); font-size: 16px; font-weight: 700; }
+.voucher-bar-info small { color: rgba(255, 255, 255, .72); font-size: 12.5px; }
+.voucher-count {
+  width: 42px; height: 42px; border-radius: var(--r-pill); flex-shrink: 0;
+  background: var(--gold); color: var(--brand-deep);
+  display: grid; place-items: center; font-size: 19px; font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.voucher-bar .btn.ghost { background: transparent; color: #fff; border-color: rgba(255, 255, 255, .3); }
+.voucher-bar .btn.ghost:hover { background: rgba(255, 255, 255, .1); }
+
+/* الجرد: سطر سطر، كبير وواضح - هاي آخر فرصة يتأكد قبل التثبيت */
+.review-lines { display: flex; flex-direction: column; gap: 7px; max-height: 46vh; overflow-y: auto; }
+.review-line {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--canvas); border-radius: var(--r-sm); padding: 11px 13px;
+}
+.review-no {
+  width: 26px; height: 26px; border-radius: var(--r-pill); flex-shrink: 0;
+  background: var(--panel); color: var(--muted); border: 1px solid var(--line-strong);
+  display: grid; place-items: center; font-size: 12.5px; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.review-item { flex: 1; min-width: 0; }
+.review-item b { display: block; font-size: 15px; font-weight: 700; }
+.review-item small { display: block; color: var(--muted); font-size: 12px; }
+.review-item small.dup { color: var(--warn); font-weight: 600; }
+.review-qty {
+  font-family: var(--font-display); font-size: 19px; font-weight: 800;
+  color: var(--brand); font-variant-numeric: tabular-nums; direction: ltr;
+  text-align: center; min-width: 76px;
+}
+.review-qty small { display: block; font-size: 11px; font-weight: 500; color: var(--muted); }
+
+@media (max-width: 640px) {
+  .voucher-bar { gap: 10px; padding: 11px 14px; }
+  .voucher-bar-info b { font-size: 14px; }
+  .voucher-bar .btn.lg { padding: 11px 18px; font-size: 14px; }
+  .review-line { gap: 8px; padding: 9px 10px; }
+  .review-qty { font-size: 17px; min-width: 60px; }
+}
 
 /* ==========================================================================
    شاشة الدخول

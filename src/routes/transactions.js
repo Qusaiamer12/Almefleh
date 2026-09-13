@@ -406,4 +406,8 @@ router.get('/meta/kinds', (_req, res) => {
   });
 });
 
-module.exports = { router, KIND_LABELS };
+module.exports = {
+  router, KIND_LABELS, GOODS_KINDS,
+  // بتستعملها السندات: نفس التحقّق ونفس تنبيه الستوك، بلا تكرار منطق
+  buildTransactionPayload, checkStock,
+};

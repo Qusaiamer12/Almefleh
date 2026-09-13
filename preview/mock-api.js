@@ -84,6 +84,7 @@ const db = {
   item_prices: [],  // كذلك
   item_components: [],
   transactions: [],
+  vouchers: [],
   notifications: [],
   requests: [],
   proposals: [],
@@ -254,7 +255,7 @@ const byName = (name) => db.items.find((i) => i.name === name)
 
 (function seed() {
   // إعادة تعبئة: صنف كبير بينزل من المشغل معبّأ بأحجام أصغر (الواقع بالمستودع)
-  const bulk = byName('مكدوس 10ك');
+  const bulk = byName('مكدوس 14ك');
   const small = byName('مكدوس 1ك');
   if (bulk && small) {
     db.item_components.push({
@@ -263,12 +264,17 @@ const byName = (name) => db.items.find((i) => i.name === name)
     });
   }
 
-  const pick = (name) => (byName(name) || db.items[0]).id;
+  // لازم أسماء موجودة فعلاً بالكتالوج - وإلا البيانات التجريبية بتشير لأصناف غلط
+  const pick = (name) => {
+    const item = byName(name);
+    if (!item) throw new Error(`صنف تجريبي مش موجود بالكتالوج: ${name}`);
+    return item.id;
+  };
   const SHATTA = pick('شطة 5ك');
-  const MAKDOUS_BIG = pick('مكدوس 10ك');
+  const MAKDOUS_BIG = pick('مكدوس 14ك');
   const MAKDOUS_SMALL = pick('مكدوس 1ك');
-  const ZAATAR = pick('زعتر 1ك');
-  const LABANEH = pick('لبنة 1ك');
+  const ZAATAR = pick('بندورة مجففة 500غ');
+  const LABANEH = pick('اسود محشي لبنة 500غ');
 
   addTxn({ kind: 'supply', item_id: MAKDOUS_BIG, quantity: 120, quantity_input: '120', occurred_at: daysAgo(24), note: 'توريد من المعصرة' });
   addTxn({ kind: 'supply', item_id: SHATTA, quantity: 200, quantity_input: '200', occurred_at: daysAgo(22) });
@@ -300,7 +306,7 @@ const byName = (name) => db.items.find((i) => i.name === name)
   const noPrice = db.items.find((i) => !db.item_prices.some((p) => p.item_id === i.id));
   notify('pending_price', 'صنف بدون سعر', `"${noPrice ? noPrice.name : 'صنف'}" بده سعر`, true);
   notify('customer_request', 'طلب/ملاحظة من عمار', 'بدي كشف حساب مفصّل عن الشهر اللي فات لو سمحت', true);
-  notify('negative_stock', 'رصيد صنف تحت الصفر', '"لبنة 1ك" صار رصيده سالب بعد آخر حركة');
+  notify('negative_stock', 'رصيد صنف تحت الصفر', '"اسود محشي لبنة 500غ" صار رصيده سالب بعد آخر حركة');
 
   audit('create', 'transactions', 'سحب زبون - بلال - مكدوس 1ك × 40');
   audit('update', 'item_prices', 'تغيير سعر "شطة 5ك" من 3.100 إلى 3.250');
@@ -575,6 +581,165 @@ function createTxn(body) {
     ? (({ unit_price, amount, price_pending, price_overridden, debt_delta, ...r }) => r)(full) : full, warnings };
 }
 
+
+// ---------- السندات ----------
+let voucherNo = 1000;
+const liveVouchers = () => db.vouchers.filter((v) => !v.deleted_at);
+
+/** نفس v_vouchers: ملخّص السند من أسطره */
+function voucherView(v) {
+  const lines = liveTxns().filter((t) => t.voucher_id === v.id).map(view);
+  const entity = v.entity_id ? entityById(v.entity_id) : null;
+  return {
+    id: v.id, voucher_no: v.voucher_no, kind: v.kind, kind_label: KIND_LABELS[v.kind],
+    entity_id: v.entity_id, entity_name: entity ? entity.name : null,
+    note: v.note, occurred_at: v.occurred_at, created_by: v.created_by,
+    created_by_name: v.created_by_name, created_at: v.created_at,
+    line_count: lines.length,
+    total_quantity: round3(lines.reduce((s, t) => s + (t.quantity || 0), 0)),
+    total_amount: round2(lines.reduce((s, t) => s + (t.amount || 0), 0)),
+    pending_price_lines: lines.filter((t) => t.price_pending).length,
+  };
+}
+/** المسجّل ما بيشوف فلوس - لا بالملخّص ولا بالأسطر */
+const hideMoney = (o) => (({ unit_price, amount, price_pending, price_overridden, debt_delta, ...r }) => r)(o);
+const redactVoucher = (v) => (session.role === 'recorder'
+  ? (({ total_amount, pending_price_lines, ...r }) => r)(v) : v);
+
+function voucherWithLines(id) {
+  const v = liveVouchers().find((x) => x.id === Number(id));
+  if (!v) fail(404, 'السند غير موجود');
+  if (session.role === 'customer' && v.entity_id !== session.entity_id) fail(403, 'بتقدر تشوف سنداتك بس');
+  const lines = liveTxns().filter((t) => t.voucher_id === v.id).map(view)
+    .map((t) => (session.role === 'recorder' ? hideMoney(t) : t));
+  return { voucher: redactVoucher(voucherView(v)), lines };
+}
+
+/** تثبيت سند: كل أسطره مرّة وحدة - يا كله يا ولا شي */
+function createVoucher(body) {
+  const kind = body.kind;
+  if (!['supply', 'customer_out', 'customer_return', 'operator_out', 'operator_in'].includes(kind)) {
+    fail(400, 'نوع السند غير معروف');
+  }
+  if (body.client_token) {
+    const dup = liveVouchers().find((v) => v.client_token === body.client_token);
+    if (dup) return { ...voucherWithLines(dup.id), warnings: [], duplicate: true };
+  }
+  const lines = Array.isArray(body.lines) ? body.lines : [];
+  if (!lines.length) fail(400, 'السند لازم يكون فيه صنف واحد على الأقل');
+  if (lines.length > 50) fail(400, 'السند الواحد بياخد 50 صنف كحد أقصى - قسّمه لسندين');
+
+  const entity = kind === 'supply' ? null : entityById(body.entity_id);
+  if (kind !== 'supply' && !entity) fail(400, 'لازم تحدد الجهة (زبون أو مشغل) قبل تثبيت السند');
+  if (['customer_out', 'customer_return'].includes(kind) && entity.type !== 'customer') {
+    fail(400, 'هاي الحركة بتنسجّل على زبون مش على المشغل');
+  }
+  if (['operator_out', 'operator_in'].includes(kind) && entity.type !== 'operator') {
+    fail(400, 'حركات المشغل بتنسجّل على المشغل بس');
+  }
+
+  // التحقّق كله قبل أي حفظ: هيك ما بيصير نص سند
+  const prepared = lines.map((line) => {
+    const item = itemById(line.item_id);
+    if (!item) fail(400, 'الصنف غير موجود');
+    const q = parseQuantity(line.quantity, item.unit);
+    return { item, quantity: q.value, quantity_input: q.raw, note: line.note || null };
+  });
+
+  const occurred_at = (session.role === 'admin' && body.occurred_at) ? body.occurred_at : new Date().toISOString();
+  const voucher = {
+    id: nextId(), voucher_no: ++voucherNo, kind, entity_id: entity ? entity.id : null,
+    note: body.note || null, occurred_at, client_token: body.client_token || null,
+    created_by: session.id, created_by_name: session.display_name,
+    created_at: new Date().toISOString(), deleted_at: null,
+  };
+  db.vouchers.push(voucher);
+
+  for (const line of prepared) {
+    addTxn({ kind, entity_id: voucher.entity_id, item_id: line.item.id,
+      quantity: line.quantity, quantity_input: line.quantity_input, note: line.note,
+      occurred_at, created_by: session.id, created_by_name: session.display_name,
+      voucher_id: voucher.id });
+  }
+
+  const head = voucherView(voucher);
+  audit('create', 'vouchers', `سند #${voucher.voucher_no} - ${KIND_LABELS[kind]}` +
+    `${head.entity_name ? ' - ' + head.entity_name : ''} - ${prepared.length} صنف`, { after_data: voucher });
+
+  const warnings = [];
+  for (const itemId of [...new Set(prepared.map((l) => l.item.id))]) {
+    if (stockOf(itemId) >= 0) continue;
+    const item = itemById(itemId);
+    warnings.push({ level: 'danger', item_id: item.id, item_name: item.name,
+      message: canSeeStock()
+        ? `تنبيه: رصيد "${item.name}" صار بالسالب (${stockOf(item.id)})`
+        : `تنبيه: الكمية المسحوبة أكتر من المتوفر بالمستودع لصنف "${item.name}"` });
+    notify('negative_stock', 'رصيد صنف تحت الصفر',
+      `"${item.name}" صار رصيده سالب بعد سند #${voucher.voucher_no}`);
+  }
+  if (head.pending_price_lines) {
+    notify('pending_price', 'سند فيه أسعار معلّقة',
+      `سند #${voucher.voucher_no} فيه ${head.pending_price_lines} صنف بلا سعر`, true);
+  }
+  return { ...voucherWithLines(voucher.id), warnings };
+}
+
+function listVouchers(q = {}) {
+  let rows = liveVouchers();
+  if (session.role === 'customer') rows = rows.filter((v) => v.entity_id === session.entity_id);
+  else if (q.entity_id) rows = rows.filter((v) => v.entity_id === Number(q.entity_id));
+  if (q.kind) rows = rows.filter((v) => v.kind === q.kind);
+  if (q.mine === 'true') rows = rows.filter((v) => v.created_by === session.id);
+  if ((q.from && q.to) || q.week !== undefined) {
+    const p = resolvePeriod(q);
+    rows = rows.filter((v) => new Date(v.occurred_at) >= p.from && new Date(v.occurred_at) < p.to);
+  }
+  return rows.map(voucherView).map(redactVoucher)
+    .sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at) || b.id - a.id)
+    .slice(0, Number(q.limit || 100));
+}
+
+function deleteVoucher(id) {
+  const v = liveVouchers().find((x) => x.id === Number(id));
+  if (!v) fail(404, 'السند غير موجود أو محذوف أصلاً');
+  const lines = liveTxns().filter((t) => t.voucher_id === v.id);
+  const stamp = new Date().toISOString();
+  for (const t of lines) t.deleted_at = stamp;
+  v.deleted_at = stamp;
+  audit('delete', 'vouchers', `حذف سند #${v.voucher_no} (${KIND_LABELS[v.kind]}` +
+    `${v.entity_id ? ' - ' + entityById(v.entity_id).name : ''} - ${lines.length} صنف)`);
+  return { ok: true, voucher_no: v.voucher_no, line_count: lines.length };
+}
+
+
+/** سندات تجريبية: عشان صفحة السندات تبيّن شغّالة من أول فتحة */
+(function seedVouchers() {
+  const find = (n) => {
+    const item = db.items.find((i) => i.name === n);
+    if (!item) throw new Error(`صنف سند تجريبي مش موجود: ${n}`);
+    return item.id;
+  };
+  const make = ({ kind, entity_id, note, at, by, lines }) => {
+    const v = { id: nextId(), voucher_no: ++voucherNo, kind, entity_id: entity_id || null,
+      note: note || null, occurred_at: at, client_token: null,
+      created_by: by.id, created_by_name: by.name, created_at: at, deleted_at: null };
+    db.vouchers.push(v);
+    for (const [name, q] of lines) {
+      addTxn({ kind, entity_id: v.entity_id, item_id: find(name), quantity: q,
+        quantity_input: String(q), occurred_at: at, voucher_id: v.id,
+        created_by: by.id, created_by_name: by.name });
+    }
+  };
+  const abood = { id: 2, name: 'عبود' };
+
+  make({ kind: 'customer_out', entity_id: 1, note: 'طلبية الخميس', at: thisWeek(30), by: abood,
+    lines: [['مكدوس 1ك', 24], ['شطة 5ك', 6], ['بندورة مجففة 500غ', 10]] });
+  make({ kind: 'customer_out', entity_id: 4, note: null, at: thisWeek(34), by: abood,
+    lines: [['اسود محشي لبنة 500غ', 12], ['بندورة مجففة 500غ', 5]] });
+  make({ kind: 'operator_out', entity_id: 5, note: 'مواد خام للتعبئة', at: thisWeek(38), by: abood,
+    lines: [['مكدوس 14ك', 4], ['شطة 5ك', 3]] });
+})();
+
 // ---------- الموجّه ----------
 const routes = {
   'GET /api/config': () => ({ app_name: 'نظام مستودعات المفلح', currency: 'د.أ',
@@ -632,6 +797,9 @@ const routes = {
     methods: [{ value: 'cash', label: 'نقدي' }, { value: 'bank', label: 'تحويل بنكي' }, { value: 'check', label: 'شيك' }],
     week_start: 'السبت' }),
   'POST /api/transactions': (b) => createTxn(b),
+
+  'GET /api/vouchers': (b, q) => ({ vouchers: listVouchers(q) }),
+  'POST /api/vouchers': (b) => createVoucher(b),
 
   'GET /api/stock': () => (canSeeStock() ? stockReport() : fail(403, 'ما عندك صلاحية لهاي الصفحة')),
   'GET /api/statements': (b, q) => {
@@ -726,6 +894,10 @@ function dynamic(method, path, body, query) {
       active: body.active ?? item.active });
     audit('update', 'items', `تعديل صنف: ${before.name}`, { before_data: before, after_data: { ...item } });
     return { item, changes: {} };
+  }
+  if ((m = path.match(/^\/api\/vouchers\/(\d+)$/))) {
+    if (method === 'GET') return voucherWithLines(m[1]);
+    if (method === 'DELETE') return deleteVoucher(m[1]);
   }
   if ((m = path.match(/^\/api\/transactions\/(\d+)$/))) {
     const txn = db.transactions.find((t) => t.id === Number(m[1]) && !t.deleted_at);

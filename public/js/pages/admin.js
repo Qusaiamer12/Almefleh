@@ -1,12 +1,13 @@
 import { api } from '../api.js';
 import { h, clear, money, qty, dateTime, dateOnly, todayString, table, toast, modal, confirmDialog,
          inputToIso, toDateTimeInput, weekStartString } from '../ui.js';
-import { renderStock, renderStatements, renderLoss, renderTransactions, stat, entryList } from './shared.js';
+import { renderStock, renderStatements, renderLoss, renderTransactions, renderVouchers, stat, entryList } from './shared.js';
 import { icon } from '../icons.js';
 
 export const ADMIN_NAV = [
   { key: 'dashboard', label: 'اللوحة', title: 'لوحة المستودع', icon: 'dashboard', render: renderDashboard },
   { key: 'stock', label: 'الستوك', title: 'الستوك اللحظي', icon: 'box', render: renderStock },
+  { key: 'vouchers', label: 'السندات', title: 'سندات البضاعة', icon: 'voucher', render: (root) => renderVouchers(root, { editable: true }) },
   { key: 'transactions', label: 'الحركات', title: 'سجل الحركات', icon: 'list', render: renderAdminTransactions },
   { key: 'items', label: 'الأصناف والأسعار', title: 'الأصناف والأسعار', icon: 'tag', render: renderItems },
   { key: 'recipes', label: 'المقادير', title: 'مقادير الأصناف', icon: 'recipe', render: renderRecipes },

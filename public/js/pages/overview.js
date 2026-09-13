@@ -1,11 +1,12 @@
 import { api } from '../api.js';
 import { h, clear, dateTime, table } from '../ui.js';
-import { renderStock, renderStatements, renderLoss, renderTransactions } from './shared.js';
+import { renderStock, renderStatements, renderLoss, renderTransactions, renderVouchers } from './shared.js';
 
 /** صفحة الاطّلاع (أبو بلال) - قراءة فقط لكل الأرقام */
 export const OVERVIEW_NAV = [
   { key: 'stock', label: 'الستوك', title: 'الستوك اللحظي', icon: 'box', render: renderStock },
   { key: 'statements', label: 'كشوفات الزباين', title: 'كشوفات الزباين', icon: 'statement', render: renderStatements },
+  { key: 'vouchers', label: 'السندات', title: 'سندات البضاعة', icon: 'voucher', render: (root) => renderVouchers(root) },
   { key: 'transactions', label: 'الحركات', title: 'سجل الحركات', icon: 'list', render: (root, ctx) => renderTransactions(root, { ctx }) },
   { key: 'loss', label: 'النقص والفاقد', title: 'النقص والفاقد', icon: 'loss', render: renderLoss },
   { key: 'requests', label: 'طلبات الزباين', title: 'طلبات وملاحظات الزباين', icon: 'message', render: renderRequests },

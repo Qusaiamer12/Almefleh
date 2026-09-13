@@ -53,6 +53,20 @@ export function qty(value, unit) {
 }
 const trim = (s) => (s.includes('.') ? s.replace(/\.?0+$/, '') : s);
 
+/**
+ * عدّ عربي صحيح: "صنف واحد" / "صنفين" / "٣ أصناف" / "١٥ صنف".
+ * @param {number} n
+ * @param {[string,string,string,string]} forms [مفرد، مثنى، جمع قلّة، تمييز مفرد]
+ */
+export function arCount(n, [one, two, few, many]) {
+  const x = Number(n) || 0;
+  if (x === 1) return one;
+  if (x === 2) return two;
+  if (x >= 3 && x <= 10) return `${x} ${few}`;
+  return `${x} ${many}`;
+}
+export const countItems = (n) => arCount(n, ['صنف واحد', 'صنفين', 'أصناف', 'صنف']);
+
 const DOW = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 const TZ = 'Asia/Amman';
 

@@ -1,6 +1,6 @@
 // مكوّنات مشتركة بين صفحة الأدمن وصفحة الاطّلاع
 import { api } from '../api.js';
-import { h, clear, money, qty, dateTime, dateOnly, table, toast, downloadCsv, todayString, KIND_PILL, METHOD_LABELS } from '../ui.js';
+import { h, clear, money, qty, dateTime, dateOnly, table, modal, toast, downloadCsv, todayString, countItems, KIND_PILL, METHOD_LABELS } from '../ui.js';
 import { icon } from '../icons.js';
 
 /** شريط اختيار الفترة: أسبوعي (يبلّش السبت) أو مدى مخصّص */
@@ -252,6 +252,7 @@ export async function renderTransactions(root, { editable = false, onEdit, onDel
     clear(box);
     const columns = [
       { label: '#', key: 'id' },
+      { label: 'السند', render: (r) => (r.voucher_no ? h('span.voucher-no', {}, `#${r.voucher_no}`) : '—') },
       { label: 'التاريخ والوقت', render: (r) => dateTime(r.occurred_at) },
       { label: 'النوع', render: (r) => h('span.pill', { class: KIND_PILL[r.kind] || '' }, r.kind_label) },
       { label: 'الجهة', render: (r) => r.entity_name || 'المستودع' },
@@ -320,6 +321,7 @@ function entryRow(t, { onEdit, onDelete, refresh } = {}) {
   const field = (k, v) => h('div.field', {}, h('span.k', {}, k), h('span.v', {}, v));
 
   more.append(
+    t.voucher_no ? field('السند', `#${t.voucher_no}`) : null,
     t.note ? field('ملاحظة', t.note) : null,
     t.created_by_name ? field('سجّلها', t.created_by_name) : null,
     field('الوقت', dateTime(t.occurred_at)),
@@ -344,3 +346,118 @@ function entryRow(t, { onEdit, onDelete, refresh } = {}) {
 }
 
 export { stat };
+
+
+/**
+ * صفحة السندات: كل سند برقمه وجرده الكامل.
+ * عبود بيثبّتها، وقصي وأبو بلال بيراجعوها سند سند بدل ما يفتّشوا بالحركات.
+ */
+/** الحركات المسعّرة بس إلها مبالغ - سندات المشغل والتوريد كمّية بحتة */
+const PRICED_KINDS = new Set(['customer_out', 'customer_return']);
+
+export async function renderVouchers(root, { editable = false } = {}) {
+  clear(root);
+  const box = h('div');
+  let params = { week: 0 };
+
+  const entitySelect = h('select', { onchange: () => refresh() }, h('option', { value: '' }, 'كل الجهات'));
+  const { entities } = await api.get('/api/users/entities');
+  for (const e of entities) entitySelect.append(h('option', { value: e.id }, e.name));
+
+  const picker = periodPicker((p) => { params = p; refresh(); });
+  picker.append(h('div.row', {}, h('label.field', {}, 'الجهة', entitySelect)));
+  root.append(picker, box);
+
+  async function refresh() {
+    const { vouchers } = await api.get('/api/vouchers', {
+      ...params, entity_id: entitySelect.value, limit: 300,
+    });
+    clear(box);
+    const columns = [
+      { label: 'رقم السند', render: (v) => h('span.voucher-no', {}, `#${v.voucher_no}`) },
+      { label: 'التاريخ والوقت', render: (v) => dateTime(v.occurred_at) },
+      { label: 'النوع', render: (v) => h('span.pill', { class: KIND_PILL[v.kind] || '' }, v.kind_label) },
+      { label: 'الجهة', render: (v) => v.entity_name || 'المستودع' },
+      { label: 'الأصناف', cls: 'num', render: (v) => countItems(v.line_count) },
+      { label: 'المبلغ', cls: 'num', render: (v) => {
+        if (!PRICED_KINDS.has(v.kind)) return '—';   // بضاعة داخلية: كميات بلا فلوس
+        if (v.pending_price_lines) return h('span.pill.warn', {}, `${v.pending_price_lines} سعر معلّق`);
+        return money(v.total_amount);
+      } },
+      { label: 'سجّله', render: (v) => v.created_by_name || '—' },
+      { label: 'ملاحظة', render: (v) => v.note || '—' },
+      { label: '', render: (v) => h('div.row', { style: 'flex-wrap:nowrap' },
+          h('button.btn.ghost.sm', { onclick: () => openVoucherSheet(v) }, 'الجرد'),
+          editable ? h('button.btn.danger.sm', { onclick: () => removeVoucher(v, refresh) }, 'حذف') : null) },
+    ];
+    box.append(h('div.card', {},
+      h('div.toolbar', {},
+        h('h3', {}, 'السندات'),
+        h('div.spacer'),
+        h('button.btn.ghost.sm', {
+          onclick: () => downloadCsv('vouchers.csv',
+            ['رقم السند', 'التاريخ', 'النوع', 'الجهة', 'عدد الأصناف', 'المبلغ', 'سجّله', 'ملاحظة'],
+            vouchers.map((v) => [v.voucher_no, dateTime(v.occurred_at), v.kind_label,
+              v.entity_name || 'المستودع', v.line_count,
+              PRICED_KINDS.has(v.kind) ? (v.total_amount ?? '') : '', v.created_by_name || '', v.note || ''])),
+        }, icon('download', 14), 'تصدير')),
+      table(columns, vouchers, { empty: 'ما في سندات بهاي الفترة' })));
+  }
+
+  await refresh();
+}
+
+/** جرد سند كامل: كل أسطره بكمياتها ومبالغها */
+async function openVoucherSheet(summary) {
+  const { voucher, lines } = await api.get(`/api/vouchers/${summary.id}`);
+  const priced = PRICED_KINDS.has(voucher.kind) && voucher.total_amount !== undefined;
+  return modal({
+    title: `جرد سند #${voucher.voucher_no}`,
+    confirmText: 'تمام',
+    cancelText: 'إغلاق',
+    wide: true,
+    body: h('div', {},
+      h('div.confirm-bar', {},
+        h('span.pill', { class: KIND_PILL[voucher.kind] || '' }, voucher.kind_label),
+        h('b', {}, voucher.entity_name || 'المستودع'),
+        h('span.muted', {}, '·'),
+        h('span', {}, dateTime(voucher.occurred_at)),
+        h('span.muted', {}, '·'),
+        h('b', {}, countItems(voucher.line_count))),
+      voucher.note ? h('div.muted', { style: 'margin-bottom:10px' }, voucher.note) : null,
+      table([
+        { label: '#', render: (l) => String(l._i + 1) },
+        { label: 'الصنف', key: 'item_name' },
+        { label: 'الكمية', cls: 'num', render: (l) => qty(l.quantity, l.item_unit) },
+        // أعمدة الفلوس بتظهر بسندات الزباين بس
+        ...(priced ? [
+          { label: 'سعر الوحدة', cls: 'num', render: (l) => (l.price_pending
+              ? h('span.pill.warn', {}, 'معلّق') : money(l.unit_price)) },
+          { label: 'المبلغ', cls: 'num', render: (l) => money(l.amount) },
+        ] : []),
+        { label: 'ملاحظة', render: (l) => l.note || '—' },
+      ], lines.map((l, i) => ({ ...l, _i: i })), { empty: 'ما ضل ولا سطر بالسند' }),
+      priced && voucher.total_amount != null
+        ? h('div.confirm-bar', { style: 'margin-top:12px' },
+            h('b', {}, 'إجمالي السند'), h('div.spacer'), h('b', {}, money(voucher.total_amount)))
+        : null),
+  });
+}
+
+async function removeVoucher(v, refresh) {
+  const ok = await modal({
+    title: `حذف سند #${v.voucher_no}`,
+    confirmText: 'حذف السند كله',
+    body: h('div', {},
+      h('div.confirm-bar', {},
+        h('span.pill', { class: KIND_PILL[v.kind] || '' }, v.kind_label),
+        h('b', {}, v.entity_name || 'المستودع'),
+        h('span.muted', {}, '·'),
+        h('b', {}, countItems(v.line_count))),
+      h('div.alert.warn', {}, 'بينحذف السند وكل أسطره مع بعض. الأرصدة والستوك بيرجعوا تلقائياً، والحذف بينسجّل بسجل التدقيق.')),
+  });
+  if (!ok) return;
+  await api.del(`/api/vouchers/${v.id}`);
+  toast(`انحذف سند #${v.voucher_no}`);
+  await refresh();
+}
