@@ -40,6 +40,17 @@ export function money(value) {
   return `${ltr(n.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }))} ${state.currency}`;
 }
 
+/**
+ * مبلغ بلا لاحقة العملة - للجداول اللي كلها بنفس العملة.
+ * تكرار "د.أ" بكل خلية بيزحم الكشف المطبوع، فبتنكتب مرّة وحدة بالترويسة.
+ */
+export function num(value) {
+  if (value === null || value === undefined || value === '') return '—';
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '—';
+  return ltr(n.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }));
+}
+
 /** كمية حسب وحدة الصنف */
 export function qty(value, unit) {
   if (value === null || value === undefined) return '—';
@@ -188,6 +199,48 @@ export function modal({ title, body, confirmText = 'حفظ', cancelText = 'إل�
     document.body.append(bg);
     setTimeout(() => content.querySelector('input,select,textarea')?.focus(), 40);
   });
+}
+
+/**
+ * طباعة عنصر واحد بس (كشف، جرد سند…) بدل ما تطلع الصفحة كلها.
+ *
+ * المبدأ: بنمشي من العنصر لفوق لحد body، وبكل مستوى بنخفي إخوته.
+ * هيك العنصر بيضل بمكانه الطبيعي بالصفحة (مش position:absolute)،
+ * فالمتصفّح بيقدر يقسّمه على كذا صفحة صح بدل ما يقصّه بصفحة وحدة.
+ */
+export function printElement(el) {
+  const hidden = [];
+  for (let node = el; node && node !== document.body; node = node.parentElement) {
+    for (const sibling of node.parentElement.children) {
+      if (sibling === node || sibling.classList.contains('print-hidden')) continue;
+      sibling.classList.add('print-hidden');
+      hidden.push(sibling);
+    }
+  }
+  document.body.classList.add('printing');
+
+  let done = false;
+  const cleanup = () => {
+    if (done) return;
+    done = true;
+    for (const node of hidden) node.classList.remove('print-hidden');
+    document.body.classList.remove('printing');
+    window.removeEventListener('afterprint', cleanup);
+  };
+  window.addEventListener('afterprint', cleanup);
+  try { window.print(); } finally { cleanup(); }
+}
+
+/** ترويسة بتبيّن بالطباعة بس: الشعار والعنوان والفترة ووقت الطباعة */
+export function printHead(title, subtitle) {
+  return h('div.print-head', {},
+    h('img.print-logo', { src: state.logo, alt: 'المفلح' }),
+    h('div.print-title', {},
+      h('b', {}, title),
+      subtitle ? h('span', {}, subtitle) : null),
+    h('div.print-meta', {},
+      h('span', {}, 'نظام مستودعات المفلح'),
+      h('span', {}, `طُبع ${dateTime(new Date().toISOString())}`)));
 }
 
 export function confirmDialog(message, confirmText = 'تأكيد') {

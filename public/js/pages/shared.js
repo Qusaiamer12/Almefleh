@@ -1,6 +1,6 @@
 // مكوّنات مشتركة بين صفحة الأدمن وصفحة الاطّلاع
 import { api } from '../api.js';
-import { h, clear, money, qty, dateTime, dateOnly, table, modal, toast, downloadCsv, todayString, countItems, KIND_PILL, METHOD_LABELS } from '../ui.js';
+import { state, h, clear, money, num, qty, dateTime, dateOnly, table, modal, toast, downloadCsv, printElement, printHead, todayString, countItems, KIND_PILL, METHOD_LABELS } from '../ui.js';
 import { icon } from '../icons.js';
 
 /** شريط اختيار الفترة: أسبوعي (يبلّش السبت) أو مدى مخصّص */
@@ -124,51 +124,120 @@ export async function renderStatements(root, ctx) {
   refresh();
 }
 
-/** بطاقة كشف حساب واحد (بتستعمل كمان بصفحة الزبون) */
+/**
+ * بطاقة كشف حساب واحد (بتستعمل كمان بصفحة الزبون).
+ *
+ * الكشف مبني عشان ينطبع: مجمّع بالأيام مع مجموع لكل يوم، وترويسة بتتكرّر
+ * على كل صفحة، وسطر ختامي واضح بالآخر. زي ما كان الكشف بالنظام القديم -
+ * أبو بلال بيمسك الورقة وبيقرأ يوم يوم بدل ما يلاحق صفوف متلاصقة.
+ */
 export function statementCard(data) {
   const rows = data.lines;
-  return h('div.card', {},
-    h('h3', {}, `كشف حساب: ${data.entity.name}`,
+  const name = data.entity.name;
+  const closing = Number(data.closing_balance || 0);
+  const credited = Math.round((Number(data.totals.payments) + Number(data.totals.returns)) * 1000) / 1000;
+
+  const debitOf  = (r) => (r.kind === 'customer_out' ? Number(r.amount || 0) : 0);
+  const creditOf = (r) => (r.kind === 'payment' ? Number(r.payment_amount || 0)
+    : r.kind === 'customer_return' ? Number(r.amount || 0) : 0);
+
+  const card = h('div.card.sheet', {},
+    printHead(`كشف حساب — ${name}`, data.period.label),
+
+    h('h3.no-print', {}, `كشف حساب: ${name}`,
       h('span.sub', {}, data.period.label),
       h('div', { style: 'flex:1' }),
-      h('button.btn.ghost.sm.no-print', { onclick: () => window.print() }, 'طباعة'),
-      h('button.btn.ghost.sm.no-print', {
-        onclick: () => downloadCsv(`statement-${data.entity.name}.csv`,
+      h('button.btn.ghost.sm', { onclick: () => printElement(card) }, icon('print', 14), 'طباعة'),
+      h('button.btn.ghost.sm', {
+        onclick: () => downloadCsv(`statement-${name}.csv`,
           ['التاريخ', 'البيان', 'الصنف', 'الكمية', 'سعر الوحدة', 'مدين', 'دائن', 'الرصيد'],
           rows.map((r) => [dateTime(r.occurred_at), r.kind_label, r.item_name || '', r.quantity ?? '',
-            r.unit_price ?? '', r.kind === 'customer_out' ? r.amount : '',
-            r.kind === 'payment' ? r.payment_amount : (r.kind === 'customer_return' ? r.amount : ''),
-            r.running_balance])),
+            r.unit_price ?? '', debitOf(r) || '', creditOf(r) || '', r.running_balance])),
       }, 'تصدير CSV')),
 
-    h('div.grid.cols-4', { style: 'margin-bottom:14px' },
+    h('div.sheet-stats', {},
       stat('الرصيد الافتتاحي', money(data.opening_balance)),
       stat('سحوبات الفترة', money(data.totals.withdrawals)),
+      Number(data.totals.returns) ? stat('إرجاعات الفترة', money(data.totals.returns)) : null,
       stat('دفعات الفترة', money(data.totals.payments)),
-      stat('الرصيد الختامي', money(data.closing_balance))),
+      stat('الرصيد الختامي', money(closing))),
+
+    h('div.sheet-note', {}, `كل المبالغ بالدينار الأردني (${state.currency}) — ٣ منازل عشرية (فلس)`),
 
     data.totals.pending_price_lines > 0
       ? h('div.alert.warn', {}, `في ${data.totals.pending_price_lines} حركة بسعر معلّق — ما بتنحسب لحد ما يتحدّد سعر الصنف.`)
-      : null,
+      : null);
 
-    table([
-      { label: 'التاريخ والوقت', render: (r) => dateTime(r.occurred_at) },
-      { label: 'البيان', render: (r) => h('span.pill', { class: KIND_PILL[r.kind] || '' }, r.kind_label) },
-      { label: 'الصنف', render: (r) => r.item_name || (r.method ? METHOD_LABELS[r.method] : '—') },
-      { label: 'الكمية', cls: 'num', render: (r) => (r.quantity == null ? '—' : qty(r.quantity, r.item_unit)) },
-      { label: 'سعر الوحدة', cls: 'num', render: (r) => (r.price_pending ? h('span.pill.warn', {}, 'معلّق') : money(r.unit_price)) },
-      { label: 'مدين (عليه)', cls: 'num', render: (r) => (r.kind === 'customer_out' ? money(r.amount) : '—') },
-      { label: 'دائن (إله)', cls: 'num', render: (r) => (r.kind === 'payment' ? money(r.payment_amount) : r.kind === 'customer_return' ? money(r.amount) : '—') },
-      { label: 'الرصيد', cls: 'num', render: (r) => h('b', {}, money(r.running_balance)) },
-      { label: 'ملاحظة', render: (r) => r.note || '—' },
-    ], rows, {
-      empty: 'ما في حركات بهاي الفترة',
-      footer: h('tr', {},
-        h('td', { colspan: 5 }, 'الرصيد الختامي'),
-        h('td.num', {}, money(data.totals.withdrawals)),
-        h('td.num', {}, money(Math.round((data.totals.payments + data.totals.returns) * 100) / 100)),
-        h('td.num', {}, money(data.closing_balance)), h('td')),
-    }));
+  if (!rows.length) {
+    card.append(h('div.empty', {}, 'ما في حركات بهاي الفترة'));
+    return card;
+  }
+
+  // تجميع بالأيام: الصفوف جاية مرتّبة بالوقت، فالأيام بتتجمّع بمرّة وحدة
+  const days = [];
+  for (const r of rows) {
+    const day = dateOnly(r.occurred_at);
+    const last = days[days.length - 1];
+    if (last && last.day === day) last.rows.push(r);
+    else days.push({ day, rows: [r] });
+  }
+
+  const COLS = 9;
+  const tbody = h('tbody');
+  for (const group of days) {
+    const label = dayName(group.rows[0].occurred_at);
+    group.rows.forEach((r, i) => {
+      tbody.append(h('tr', {},
+        // خلية اليوم بتمتد على كل صفوف اليوم - زي عمود اليوم بالكشف الورقي
+        i === 0 ? h('td.day-cell', { rowspan: group.rows.length },
+          h('b', {}, label), h('small', {}, group.day)) : null,
+        h('td', {}, h('span.pill', { class: KIND_PILL[r.kind] || '' }, r.kind_label)),
+        h('td', {}, r.item_name || (r.method ? METHOD_LABELS[r.method] : '—')),
+        h('td.num', {}, r.quantity == null ? '—' : qty(r.quantity, r.item_unit)),
+        h('td.num', {}, r.price_pending ? h('span.pill.warn', {}, 'معلّق') : num(r.unit_price)),
+        h('td.num', {}, debitOf(r) ? num(r.amount) : '—'),
+        h('td.num', {}, creditOf(r) ? num(creditOf(r)) : '—'),
+        h('td.num', {}, h('b', {}, num(r.running_balance))),
+        h('td.note', {}, r.note || '—')));
+    });
+    const dayDebit  = group.rows.reduce((sum, r) => sum + debitOf(r), 0);
+    const dayCredit = group.rows.reduce((sum, r) => sum + creditOf(r), 0);
+    tbody.append(h('tr.day-sum', {},
+      h('td', { colspan: 5 }, `مجموع ${label}`),
+      h('td.num', {}, num(dayDebit)),
+      h('td.num', {}, num(dayCredit)),
+      h('td.num', {}, num(group.rows[group.rows.length - 1].running_balance)),
+      h('td')));
+  }
+
+  const head = (label, cls = '') => h(`th${cls}`, {}, label);
+  card.append(h('div.table-wrap', {}, h('table.sheet-table', {},
+    h('thead', {},
+      // بتتكرّر على كل صفحة مطبوعة: مين الكشف ولأي فترة
+      h('tr.sheet-title', {}, h('th', { colspan: COLS }, `كشف حساب — ${name} · ${data.period.label}`)),
+      h('tr', {},
+        head('اليوم'), head('البيان'), head('الصنف'),
+        head('الكمية', '.num'), head('سعر الوحدة', '.num'),
+        head('مدين (عليه)', '.num'), head('دائن (إله)', '.num'),
+        head('الرصيد', '.num'), head('ملاحظة'))),
+    tbody,
+    h('tfoot', {},
+      h('tr', {},
+        h('td', { colspan: 5 }, 'إجمالي الفترة'),
+        h('td.num', {}, num(data.totals.withdrawals)),
+        h('td.num', {}, num(credited)),
+        h('td.num', {}, num(closing)),
+        h('td')),
+      h('tr.sheet-net', {},
+        h('td', { colspan: 8 },
+          `الرصيد الختامي ${closing > 0 ? `— المطلوب من ${name}` : closing < 0 ? `— رصيد إله` : '— مسكّر'}`),
+        h('td.num', {}, h('b', {}, money(closing))))))));
+
+  card.append(h('div.print-foot', {},
+    h('span', {}, `نظام مستودعات المفلح — كشف ${name}`),
+    h('span', {}, data.period.label)));
+
+  return card;
 }
 
 /** تقرير النقص/الفاقد */

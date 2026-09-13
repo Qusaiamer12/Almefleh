@@ -653,11 +653,130 @@ body.has-voucher-bar .content { padding-bottom: 112px; }
 /* ==========================================================================
    الطباعة
    ========================================================================== */
+/* ==========================================================================
+   الكشف: مجمّع بالأيام مع مجموع لكل يوم (نفس منطق الكشف الورقي)
+   ========================================================================== */
+.sheet-stats {
+  display: grid; gap: 12px; margin-bottom: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+/* عمود اليوم: خلية وحدة ممتدّة على صفوف اليوم كله */
+.sheet-table .day-cell {
+  background: var(--brand-soft); text-align: center; vertical-align: middle;
+  min-width: 96px; border-inline-start: 2px solid var(--brand);
+}
+.sheet-table .day-cell b { display: block; font-size: 14px; color: var(--brand-deep); }
+.sheet-table .day-cell small {
+  display: block; margin-top: 2px; font-size: 11.5px; color: var(--brand);
+  font-variant-numeric: tabular-nums; direction: ltr;
+}
+.sheet-table .day-sum td {
+  background: var(--canvas); font-weight: 700; color: var(--brand-deep);
+  border-block: 1px solid var(--line-strong);
+}
+.sheet-table tbody tr:hover td.day-cell { background: var(--brand-soft); }
+.sheet-table td.note { white-space: normal; max-width: 200px; color: var(--muted); font-size: 12.5px; }
+/* عنوان الكشف جوّا الجدول: مخفي على الشاشة، بيتكرّر على كل صفحة مطبوعة */
+.sheet-table .sheet-title { display: none; }
+.sheet-table .sheet-net td {
+  background: var(--brand-soft); color: var(--brand-deep);
+  font-size: 14.5px; border-top: 2px solid var(--brand);
+}
+
+.sheet-note { color: var(--muted); font-size: 12px; margin: -6px 2px 12px; }
+
+/* الترويسة والتذييل: بالطباعة بس */
+.print-head, .print-foot { display: none; }
+
+/* ==========================================================================
+   الطباعة: الكشف لحاله على ورق A4، بترويسة بتتكرّر وأيام مفصولة
+   ========================================================================== */
+@page { size: A4; margin: 12mm 10mm 14mm; }
+
 @media print {
-  .sidebar, .topbar, .no-print, .btn, #toasts, .toolbar { display: none !important; }
-  body { background: #fff; }
-  .panel { box-shadow: none; border: none; padding: 0; }
+  /* الأزرار ما إلها معنى على ورق - بس العناوين بتضل (مش زي ما كان .toolbar كله بينخفي) */
+  .sidebar, .topbar, #toasts, .no-print, .btn,
+  .voucher-bar, .demo-bar { display: none !important; }
+  /* بيتحطّوا من printElement على كل إخوة العنصر المطبوع */
+  .print-hidden { display: none !important; }
+
+  html, body { background: #fff; color: #000; }
+  /* min-height: 100vh وهوامش آخر عنصر بتولّد صفحة فاضية بالآخر */
+  .shell, .main { display: block; min-height: 0; }
   .content { padding: 0; }
+  .panel, .card {
+    box-shadow: none; border: none; border-radius: 0;
+    padding: 0; margin: 0;
+  }
+  .card + .card { margin-top: 8mm; }
+
+  /* الألوان لازم تنطبع فعلاً - بدونها الخلفيات بتروح والكشف بيصير صفوف متلاصقة */
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  .print-head {
+    display: flex; align-items: center; gap: 14px;
+    border-bottom: 2px solid var(--brand); padding-bottom: 8px; margin-bottom: 8px;
+  }
+  .print-logo { height: 46px; width: auto; }
+  .print-title { flex: 1; }
+  .print-title b {
+    display: block; font-family: var(--font-display);
+    font-size: 17pt; font-weight: 800; color: var(--brand-deep);
+  }
+  .print-title span { font-size: 10pt; color: #333; }
+  .print-meta {
+    text-align: end; font-size: 8.5pt; color: #555; display: flex;
+    flex-direction: column; gap: 2px;
+  }
+  .sheet-note { font-size: 8pt; color: #555; margin: -3mm 0 4mm; }
+  .print-foot {
+    display: flex; justify-content: space-between;
+    margin-top: 6mm; padding-top: 4px; border-top: 1px solid var(--line-strong);
+    font-size: 8pt; color: #555;
+  }
+
+  /* أرقام الفترة: صندوق مأطّر بدل تعبئة فاتحة بتضيع بالطباعة */
+  /* صفّ واحد دايماً - لفّها لسطرين بيكسر شكل الترويسة */
+  .sheet-stats {
+    gap: 0; margin-bottom: 6mm; border: 1px solid var(--line-strong);
+    grid-auto-flow: column; grid-auto-columns: 1fr; grid-template-columns: none;
+  }
+  .sheet-stats .stat {
+    background: #fff; border: none; border-inline-start: 1px solid var(--line-strong);
+    border-radius: 0; padding: 7px 10px; text-align: center;
+  }
+  .sheet-stats .stat:first-child { border-inline-start: none; }
+  .sheet-stats .stat .label { font-size: 8.5pt; color: #444; }
+  .sheet-stats .stat .value { font-size: 14pt; margin-top: 1px; }
+
+  /* الجدول: الترويسة بتتكرّر على كل صفحة، والصف ما بينقصّ بين صفحتين */
+  .table-wrap { overflow: visible; border: none; border-radius: 0; }
+  table { font-size: 8.5pt; }
+  thead { display: table-header-group; }   /* الترويسة بتتكرّر على كل صفحة */
+  tfoot { display: table-row-group; }      /* بس الإجماليات مرّة وحدة بالآخر */
+  tr, .day-sum, .sheet-net { break-inside: avoid; page-break-inside: avoid; }
+  th, td { padding: 4px 6px; border: 1px solid #C8D2CE; }
+  th {
+    position: static; background: var(--brand); color: #fff;
+    font-size: 8.5pt; font-weight: 700;
+  }
+  .sheet-table .sheet-title { display: table-row; }
+  .sheet-table .sheet-title th {
+    background: var(--gold-soft); color: var(--brand-deep);
+    font-size: 10pt; text-align: center; border: 1px solid var(--gold);
+  }
+  tbody tr:hover td { background: transparent; }
+  .sheet-table .day-cell { background: var(--brand-soft); }
+  .sheet-table .day-sum td { background: var(--canvas); }
+  .sheet-table .sheet-net td { background: var(--gold-soft); font-size: 11pt; }
+  tfoot td { background: var(--canvas); }
+
+  /* الشارات: نص بإطار خفيف - التعبئة الملوّنة بتطلع رمادية على طابعة أبيض وأسود */
+  .pill {
+    background: transparent !important; color: #000 !important;
+    border: 1px solid #7A8B84; padding: 0 5px; font-size: 8pt;
+  }
+  .alert { border: 1px solid #C8A24A; background: var(--gold-soft); padding: 6px 9px; font-size: 9pt; }
 }
 
 /* ==========================================================================
