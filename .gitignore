@@ -5,3 +5,6 @@ node_modules/
 backups/
 tmp/
 .DS_Store
+
+# مخرجات graphify (بتتولّد محلياً - فيها مسارات خاصة بالجهاز وكاش)
+graphify-out/
