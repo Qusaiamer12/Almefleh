@@ -119,7 +119,8 @@ test('دورة كاملة: توريد ← مشغل ← سحب زبون ← دف�
   await call('recorder', 'POST', '/api/transactions', { kind: 'operator_out', entity_id: operator, item_id: bucketId, quantity: '20' });
   await call('recorder', 'POST', '/api/transactions', { kind: 'operator_in', entity_id: operator, item_id: jarId, quantity: '180' });
   await call('recorder', 'POST', '/api/transactions', { kind: 'customer_out', entity_id: blalId, item_id: jarId, quantity: '50' });
-  await call('recorder', 'POST', '/api/transactions', { kind: 'payment', entity_id: blalId, payment_amount: '100', method: 'cash' });
+  // الدفعة من حساب المدير - عبود ما بيسجّل فلوس
+  await call('admin', 'POST', '/api/transactions', { kind: 'payment', entity_id: blalId, payment_amount: '100', method: 'cash' });
 
   const { data: stock } = await call('admin', 'GET', '/api/stock');
   const bucketRow = stock.items.find((i) => i.item_id === bucketId);

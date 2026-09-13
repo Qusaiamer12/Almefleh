@@ -36,7 +36,8 @@ export function money(value) {
   if (value === null || value === undefined || value === '') return '—';
   const n = Number(value);
   if (!Number.isFinite(n)) return '—';
-  return `${ltr(n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))} ${state.currency}`;
+  // الدينار الأردني ألف فلس => ٣ منازل عشرية
+  return `${ltr(n.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }))} ${state.currency}`;
 }
 
 /** كمية حسب وحدة الصنف */

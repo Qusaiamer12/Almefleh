@@ -73,6 +73,12 @@ function build() {
     for (const [oldName, newName] of (renames.get(mod.name) || new Map())) {
       source = source.replace(new RegExp(`\\b${oldName}\\b`, 'g'), newName);
     }
+    if (mod.name === 'api') {
+      // حقن الكتالوج الحقيقي بدل المصفوفة الفاضية
+      const catalogFile = path.join(ROOT, 'preview', 'catalog.json');
+      const catalog = fs.existsSync(catalogFile) ? fs.readFileSync(catalogFile, 'utf8') : '[]';
+      source = source.replace('/*__CATALOG__*/ []', catalog);
+    }
     if (mod.name === 'ui') {
       source = source.replace("logo: '/assets/logo'", `logo: '${logoDataUri}'`);
     }

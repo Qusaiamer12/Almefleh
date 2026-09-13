@@ -231,6 +231,37 @@ test('معرّف غير صالح بالمسار بيرجّع خطأ واضح م�
   }
 });
 
+test('الدفعات للمدير بس - عبود ما إله فيها', async () => {
+  const { rows: entity } = await db.query("SELECT id FROM entities WHERE name = 'بلال'");
+  const { rows: item } = await db.query('SELECT id FROM items LIMIT 1');
+
+  // تسجيل دفعة
+  const create = await call('recorder', 'POST', '/api/transactions', {
+    kind: 'payment', entity_id: entity[0].id, payment_amount: '50', method: 'cash',
+  });
+  assert.strictEqual(create.status, 403);
+  assert.match(create.data.error, /المدير/);
+
+  // وقصي بيقدر
+  const byAdmin = await call('admin', 'POST', '/api/transactions', {
+    kind: 'payment', entity_id: entity[0].id, payment_amount: '50', method: 'cash',
+  });
+  assert.strictEqual(byAdmin.status, 201);
+  const paymentId = byAdmin.data.transaction.id;
+
+  // ولا بيقدر يعدّل أو يحذف دفعة سجّلها قصي
+  const edit = await call('recorder', 'PATCH', `/api/transactions/${paymentId}`, { note: 'تعديل' });
+  assert.strictEqual(edit.status, 403);
+  const remove = await call('recorder', 'DELETE', `/api/transactions/${paymentId}`);
+  assert.strictEqual(remove.status, 403);
+
+  // بس حركات البضاعة عادي
+  const goods = await call('recorder', 'POST', '/api/transactions', {
+    kind: 'supply', item_id: item[0].id, quantity: '5',
+  });
+  assert.strictEqual(goods.status, 201);
+});
+
 // ================================================== التحقق من المدخلات
 test('الحقول غير المعروفة بتنرفض (مش بتنتجاهل)', async () => {
   const res = await call('admin', 'POST', '/api/items', {
@@ -330,6 +361,54 @@ test('مكوّن مكرّر بالوصفة بينرفض', async () => {
   });
   assert.strictEqual(res.status, 400);
   assert.match(res.data.error, /مكرّر/);
+});
+
+// ================================================== الكتالوج والبحث
+test('البحث بيتسامح مع الإملاء والمسافات والأسماء البديلة', async () => {
+  // صنف بأسماء بديلة زي ما بالكتالوج الحقيقي
+  await db.query(
+    `INSERT INTO items (name, unit, base, size, size_unit, aliases)
+     VALUES ('شطة 5ك', 'piece', 'شطة', 5, 'ك',
+             ARRAY['شطة 5 كيلو', 'شطه 5ك', 'شطة5ك'])`,
+  );
+  await db.query(
+    `INSERT INTO items (name, unit, base, size, size_unit) VALUES ('شطة 10ك', 'piece', 'شطة', 10, 'ك')`,
+  );
+
+  const cases = [
+    ['شطه', 2, 'إملاء غلط (ه بدل ة) لازم يلاقي العائلة كاملة'],
+    ['شطة5ك', 1, 'بلا مسافات'],
+    ['شطه 5 كيلو', 1, 'اسم بديل بإملاء غلط'],
+    ['شطة', 2, 'اسم العائلة'],
+  ];
+  for (const [term, expected, why] of cases) {
+    const { data } = await call('admin', 'GET', `/api/items?search=${encodeURIComponent(term)}`);
+    assert.strictEqual(data.items.length, expected, `"${term}" — ${why}`);
+  }
+
+  // بحث ما بيلاقي شي بيرجع فاضي مش كل الأصناف
+  const none = await call('admin', 'GET', '/api/items?search=' + encodeURIComponent('صنف مش موجود ابدا'));
+  assert.strictEqual(none.data.items.length, 0);
+});
+
+test('دقّة الفلس: السعر بـ٣ منازل ما بيتقرّب', async () => {
+  const item = await call('admin', 'POST', '/api/items', {
+    name: 'صنف فلس', unit: 'piece', price: 0.025,
+  });
+  const { rows } = await db.query(
+    'SELECT price FROM item_prices WHERE item_id = $1', [item.data.item.id],
+  );
+  assert.strictEqual(Number(rows[0].price), 0.025, 'الدينار ألف فلس - ٠.٠٢٥ ما بتصير ٠.٠٣');
+
+  // والمبلغ بالحركة كمان
+  const { rows: entity } = await db.query("SELECT id FROM entities WHERE name = 'سعد'");
+  const txn = await call('admin', 'POST', '/api/transactions', {
+    kind: 'customer_out', entity_id: entity[0].id, item_id: item.data.item.id, quantity: '4',
+  });
+  assert.strictEqual(Number(txn.data.transaction.amount), 0.1); // 4 × 0.025
+
+  // تنظيف: الاختبارات بتشارك نفس الزباين، فحركة باقية بتخرّب حسابات غيرها
+  await call('admin', 'DELETE', `/api/transactions/${txn.data.transaction.id}`);
 });
 
 // ================================================== التزامن

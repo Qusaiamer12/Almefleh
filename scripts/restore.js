@@ -16,14 +16,18 @@ const { verifyDump, TABLES } = require('../src/jobs/backup');
 // جداول بتنحفظ بالنسخة للتوثيق بس ما بتنسترجع
 const SKIP_ON_RESTORE = new Set(['schema_migrations']);
 
-/** الأعمدة الموجودة فعلياً بالجدول - عشان نتعامل مع نسخ من إصدار أقدم */
+/**
+ * أعمدة الجدول مع أنواعها.
+ * النوع مهم: مصفوفة Postgres (text[]) لازم تنبعت كمصفوفة JS، و jsonb لازم
+ * ينبعت كنص JSON. التفريق بشكل القيمة ما بينفع - المصفوفة بتكون الاتنين.
+ */
 async function tableColumns(client, table) {
   const { rows } = await client.query(
-    `SELECT column_name FROM information_schema.columns
+    `SELECT column_name, data_type, udt_name FROM information_schema.columns
      WHERE table_schema = 'public' AND table_name = $1`,
     [table],
   );
-  return new Set(rows.map((r) => r.column_name));
+  return new Map(rows.map((r) => [r.column_name, r]));
 }
 
 async function restore(filePath, { dryRun = true, log = console.log } = {}) {
@@ -69,8 +73,8 @@ async function restore(filePath, { dryRun = true, log = console.log } = {}) {
       const rows = dump.data[table];
       if (!rows?.length) { restored[table] = 0; continue; }
 
-      const existingColumns = await tableColumns(client, table);
-      const columns = Object.keys(rows[0]).filter((c) => existingColumns.has(c));
+      const columnTypes = await tableColumns(client, table);
+      const columns = Object.keys(rows[0]).filter((c) => columnTypes.has(c));
       if (columns.length === 0) throw new Error(`جدول ${table}: ما في أعمدة مطابقة`);
 
       const quoted = columns.map((c) => `"${c}"`).join(', ');
@@ -81,7 +85,7 @@ async function restore(filePath, { dryRun = true, log = console.log } = {}) {
         const values = [];
         const placeholders = batch.map((row, rowIndex) => {
           const slots = columns.map((column, columnIndex) => {
-            values.push(normalize(row[column]));
+            values.push(normalize(row[column], columnTypes.get(column)));
             return `$${rowIndex * columns.length + columnIndex + 1}`;
           });
           return `(${slots.join(', ')})`;
@@ -117,11 +121,17 @@ async function restore(filePath, { dryRun = true, log = console.log } = {}) {
   return { checked: true, restored: true, counts: restored };
 }
 
-/** pg بترجّع التواريخ ككائنات Date والـ jsonb ككائنات - بنرجّعها لصيغتها */
-function normalize(value) {
-  if (value && typeof value === 'object' && !(value instanceof Date) && !Buffer.isBuffer(value)) {
-    return JSON.stringify(value);
-  }
+/** تحويل القيمة للصيغة اللي بيتوقّعها العمود حسب نوعه */
+function normalize(value, column) {
+  if (value === null || value === undefined) return value;
+  if (value instanceof Date || Buffer.isBuffer(value)) return value;
+
+  const isArray = column?.data_type === 'ARRAY' || String(column?.udt_name || '').startsWith('_');
+  const isJson = column?.data_type === 'jsonb' || column?.data_type === 'json';
+
+  if (isArray) return Array.isArray(value) ? value : [value];  // pg بيحوّلها لصيغة Postgres
+  if (isJson) return JSON.stringify(value);
+  if (typeof value === 'object') return JSON.stringify(value); // احتياط
   return value;
 }
 

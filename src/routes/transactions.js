@@ -18,6 +18,16 @@ const ALL_KINDS = [...GOODS_KINDS, 'payment'];
 const CUSTOMER_KINDS = ['customer_out', 'customer_return', 'payment'];
 const OPERATOR_KINDS = ['operator_out', 'operator_in'];
 
+/**
+ * الدفعات شغل مالي - قصي بس بيسجّلها.
+ * عبود بيسجّل بضاعة فقط (بدون أي أرقام مالية).
+ */
+function assertMayHandlePayment(user, kind) {
+  if (kind === 'payment' && user.role !== 'admin') {
+    const e = new Error('الدفعات بتنسجّل من حساب المدير بس'); e.status = 403; throw e;
+  }
+}
+
 const KIND_LABELS = {
   supply: 'توريد للمستودع',
   customer_out: 'سحب زبون',
@@ -186,6 +196,7 @@ router.get('/', asyncHandler(async (req, res) => {
 /** تسجيل حركة جديدة */
 router.post('/', requireRole('admin', 'recorder'), asyncHandler(async (req, res) => {
   const input = validate(req.body, TXN_SCHEMA);
+  assertMayHandlePayment(req.user, input.kind);
 
   // الوقت تلقائي؛ الأدمن بس بيقدر يحدّد تاريخ يدوي (لتصحيح حركة قديمة)
   const occurredAt = (req.user.role === 'admin' && input.occurred_at) ? input.occurred_at : new Date();
@@ -286,6 +297,8 @@ router.patch('/:id', requireRole('admin', 'recorder'), asyncHandler(async (req, 
     );
     const before = existing[0];
     if (!before) { const e = new Error('الحركة غير موجودة'); e.status = 404; throw e; }
+    assertMayHandlePayment(req.user, before.kind);
+    if (input.kind) assertMayHandlePayment(req.user, input.kind);
 
     // دمج القيم الجديدة فوق القديمة
     const merged = {
@@ -353,6 +366,7 @@ router.delete('/:id', requireRole('admin', 'recorder'), asyncHandler(async (req,
 
     const { rows: existing } = await client.query('SELECT * FROM v_transactions WHERE id = $1', [id]);
     const before = existing[0];
+    assertMayHandlePayment(req.user, before.kind);
 
     await client.query(
       'UPDATE transactions SET deleted_at = now(), deleted_by = $1 WHERE id = $2 AND deleted_at IS NULL',

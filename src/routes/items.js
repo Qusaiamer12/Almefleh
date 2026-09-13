@@ -39,16 +39,33 @@ router.get('/', asyncHandler(async (req, res) => {
   const where = [];
   const params = [];
   if (!includeInactive) where.push('s.active = TRUE');
-  if (search) { params.push(`%${search}%`); where.push(`s.item_name ILIKE $${params.length}`); }
-  if (letter) { params.push(`${letter}%`); where.push(`s.item_name LIKE $${params.length}`); }
+
+  /**
+   * بحث متسامح: بيطبّع النص العربي (شطه = شطة، احمد = أحمد) وبيشيل المسافات،
+   * فـ"شطه5ك" بتلاقي "شطة 5ك". وبيدوّر بالأسماء البديلة كمان - الكتالوج فيه
+   * ٦ أسماء بديلة بالمتوسط لكل صنف، وهاي هي اللي الناس بتكتبها فعلاً.
+   */
+  if (search) {
+    params.push(search);
+    const term = `'%' || replace(ar_normalize($${params.length}), ' ', '') || '%'`;
+    where.push(`(
+      replace(ar_normalize(i.name), ' ', '') LIKE ${term}
+      OR replace(ar_normalize(COALESCE(i.base, '')), ' ', '') LIKE ${term}
+      OR EXISTS (SELECT 1 FROM unnest(i.aliases) alias
+                 WHERE replace(ar_normalize(alias), ' ', '') LIKE ${term})
+    )`);
+  }
+  if (letter) { params.push(`${letter}%`); where.push(`COALESCE(i.base, i.name) LIKE $${params.length}`); }
 
   const { rows } = await db.query(
     `SELECT s.item_id AS id, s.item_name AS name, s.unit, s.active,
             s.quantity, s.current_price, s.last_movement_at,
+            i.base, i.size, i.size_unit, i.cost_price,
             EXISTS (SELECT 1 FROM item_components ic WHERE ic.parent_item_id = s.item_id) AS has_recipe
      FROM v_stock s
+     JOIN items i ON i.id = s.item_id
      ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-     ORDER BY s.item_name`,
+     ORDER BY COALESCE(i.base, i.name), i.size NULLS FIRST, i.name`,
     params,
   );
 
@@ -56,7 +73,7 @@ router.get('/', asyncHandler(async (req, res) => {
   // عبود بيسجّل بدون أرقام، والزبون بيشوف كشفه هو مش محتويات المستودع.
   const payload = canSeeStock(req.user)
     ? rows
-    : rows.map(({ quantity, current_price, ...rest }) => ({
+    : rows.map(({ quantity, current_price, cost_price, ...rest }) => ({
         ...rest,
         // عبود بس بيحتاج يعرف إنه الصنف بدون سعر (عشان يعرف إنه قصي لازم يسعّره)
         ...(req.user.role === 'recorder' ? { needs_price: current_price == null } : {}),
@@ -68,7 +85,7 @@ router.get('/', asyncHandler(async (req, res) => {
 /** الحروف اللي عندها أصناف - لبار الأبجدية */
 router.get('/letters', asyncHandler(async (_req, res) => {
   const { rows } = await db.query(
-    `SELECT DISTINCT left(name, 1) AS letter FROM items WHERE active = TRUE ORDER BY 1`,
+    `SELECT DISTINCT left(COALESCE(base, name), 1) AS letter FROM items WHERE active = TRUE ORDER BY 1`,
   );
   res.json({ letters: rows.map((r) => r.letter) });
 }));

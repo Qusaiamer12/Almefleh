@@ -80,30 +80,9 @@ const db = {
     { id: 6, username: 'ammar', password: 'Almefleh@2024', display_name: 'عمار', role: 'customer', entity_id: 3, notifications_on: true, active: true },
     { id: 7, username: 'saad', password: 'Almefleh@2024', display_name: 'سعد', role: 'customer', entity_id: 4, notifications_on: true, active: true },
   ],
-  items: [
-    { id: 1, name: 'سطل زيتون', unit: 'piece', active: true },
-    { id: 2, name: 'جاط زيتون', unit: 'piece', active: true },
-    { id: 3, name: 'زيت زيتون', unit: 'kg', active: true },
-    { id: 4, name: 'جاط مكدوس', unit: 'piece', active: true },
-    { id: 5, name: 'سطل مكدوس', unit: 'piece', active: true },
-    { id: 6, name: 'لبنة بلدية', unit: 'kg', active: true },
-    { id: 7, name: 'دبس رمان', unit: 'kg', active: true },
-    { id: 8, name: 'زعتر أخضر', unit: 'kg', active: true },
-  ],
-  item_prices: [
-    { id: 1, item_id: 1, price: 25, effective_from: daysAgo(90), note: 'سعر أوّلي', created_by_name: 'قصي' },
-    { id: 2, item_id: 2, price: 3.5, effective_from: daysAgo(90), note: 'سعر أوّلي', created_by_name: 'قصي' },
-    { id: 3, item_id: 3, price: 6, effective_from: daysAgo(90), note: 'سعر أوّلي', created_by_name: 'قصي' },
-    { id: 4, item_id: 5, price: 30, effective_from: daysAgo(60), note: 'سعر أوّلي', created_by_name: 'قصي' },
-    { id: 5, item_id: 6, price: 4.5, effective_from: daysAgo(60), note: 'سعر أوّلي', created_by_name: 'قصي' },
-    { id: 6, item_id: 7, price: 8, effective_from: daysAgo(45), note: 'سعر أوّلي', created_by_name: 'قصي' },
-    { id: 7, item_id: 8, price: 12, effective_from: daysAgo(45), note: 'سعر أوّلي', created_by_name: 'قصي' },
-    // جاط مكدوس (٤) بدون سعر عمداً - عشان تشوف "السعر المعلّق"
-  ],
-  item_components: [
-    { id: 1, parent_item_id: 2, component_item_id: 1, quantity_per_unit: 0.1 },
-    { id: 2, parent_item_id: 4, component_item_id: 5, quantity_per_unit: 0.125 },
-  ],
+  items: [],        // بتتعبّى من الكتالوج تحت
+  item_prices: [],  // كذلك
+  item_components: [],
   transactions: [],
   notifications: [],
   requests: [],
@@ -111,7 +90,36 @@ const db = {
   audit: [],
 };
 
+// ---------- الكتالوج الحقيقي (بينحقن وقت البناء من catalog.json) ----------
+const CATALOG = /*__CATALOG__*/ [];
+
+(function loadCatalog() {
+  let nextItemId = 0;
+  for (const row of CATALOG) {
+    const id = ++nextItemId;
+    db.items.push({
+      id, name: row.label, unit: 'piece', active: true,
+      base: row.base || null,
+      size: row.size ?? null,
+      size_unit: row.unit || null,
+      aliases: row.aliases || [],
+      cost_price: row.priceIn ?? null,
+    });
+    if (row.priceOut != null) {
+      db.item_prices.push({
+        id: 10000 + id, item_id: id, price: row.priceOut,
+        effective_from: daysAgo(60), note: 'استيراد من الكتالوج', created_by_name: 'قصي',
+      });
+    }
+  }
+  seq = Math.max(seq, nextItemId + 10500);
+})();
+
 const itemById = (id) => db.items.find((i) => i.id === Number(id));
+/** تطبيع عربي: "شطه" = "شطة"، وبلا مسافات */
+const normAr = (t) => String(t || '').toLowerCase()
+  .replace(/[أإآٱ]/g, 'ا').replace(/ة/g, 'ه').replace(/[ىئ]/g, 'ي').replace(/ؤ/g, 'و')
+  .replace(/[\u064B-\u0652\u0640]/g, '').replace(/\s+/g, '');
 const entityById = (id) => db.entities.find((e) => e.id === Number(id));
 
 function priceAt(itemId, at) {
@@ -240,44 +248,62 @@ function notify(type, title, body, onlyAdmin = false) {
   }
 }
 
+/** الصنف بالاسم - البيانات التجريبية لازم تشير لأصناف حقيقية من الكتالوج */
+const byName = (name) => db.items.find((i) => i.name === name)
+  || db.items.find((i) => normAr(i.name) === normAr(name));
+
 (function seed() {
-  addTxn({ kind: 'supply', item_id: 1, quantity: 200, quantity_input: '200', occurred_at: daysAgo(24), note: 'توريد من المزرعة' });
-  addTxn({ kind: 'supply', item_id: 5, quantity: 80, quantity_input: '80', occurred_at: daysAgo(22) });
-  addTxn({ kind: 'supply', item_id: 6, quantity: 60, quantity_input: '60ك', occurred_at: daysAgo(20) });
-  addTxn({ kind: 'operator_out', entity_id: 5, item_id: 1, quantity: 20, quantity_input: '20', occurred_at: daysAgo(18) });
-  addTxn({ kind: 'operator_in', entity_id: 5, item_id: 2, quantity: 180, quantity_input: '180', occurred_at: daysAgo(17), note: 'رجع ناقص عن المتوقّع' });
-  addTxn({ kind: 'operator_out', entity_id: 5, item_id: 5, quantity: 16, quantity_input: '16', occurred_at: daysAgo(16) });
-  addTxn({ kind: 'operator_in', entity_id: 5, item_id: 4, quantity: 120, quantity_input: '120', occurred_at: daysAgo(15) });
+  // إعادة تعبئة: صنف كبير بينزل من المشغل معبّأ بأحجام أصغر (الواقع بالمستودع)
+  const bulk = byName('مكدوس 10ك');
+  const small = byName('مكدوس 1ك');
+  if (bulk && small) {
+    db.item_components.push({
+      id: nextId(), parent_item_id: small.id, component_item_id: bulk.id,
+      quantity_per_unit: 0.1,   // كل سطل ١ك بده عُشر السطل الكبير
+    });
+  }
 
-  addTxn({ kind: 'customer_out', entity_id: 1, item_id: 2, quantity: 50, quantity_input: '50', occurred_at: daysAgo(12) });
-  addTxn({ kind: 'customer_out', entity_id: 2, item_id: 2, quantity: 30, quantity_input: '30', occurred_at: daysAgo(11) });
+  const pick = (name) => (byName(name) || db.items[0]).id;
+  const SHATTA = pick('شطة 5ك');
+  const MAKDOUS_BIG = pick('مكدوس 10ك');
+  const MAKDOUS_SMALL = pick('مكدوس 1ك');
+  const ZAATAR = pick('زعتر 1ك');
+  const LABANEH = pick('لبنة 1ك');
+
+  addTxn({ kind: 'supply', item_id: MAKDOUS_BIG, quantity: 120, quantity_input: '120', occurred_at: daysAgo(24), note: 'توريد من المعصرة' });
+  addTxn({ kind: 'supply', item_id: SHATTA, quantity: 200, quantity_input: '200', occurred_at: daysAgo(22) });
+  addTxn({ kind: 'supply', item_id: ZAATAR, quantity: 90, quantity_input: '90', occurred_at: daysAgo(20) });
+
+  // ===== دورة إعادة تعبئة هالأسبوع (عشان تقرير الفاقد يبيّن) =====
+  // طلع ١٠ سطول كبار، والوصفة ٠.١ للسطل الصغير => المتوقّع ١٠٠ سطل صغير
+  addTxn({ kind: 'operator_out', entity_id: 5, item_id: MAKDOUS_BIG, quantity: 10, quantity_input: '10', occurred_at: thisWeek(2) });
+  // رجع ٩٢ بس => فاقد ٨ (٨٪)
+  addTxn({ kind: 'operator_in', entity_id: 5, item_id: MAKDOUS_SMALL, quantity: 92, quantity_input: '92', occurred_at: thisWeek(6) });
+
+  addTxn({ kind: 'customer_out', entity_id: 1, item_id: SHATTA, quantity: 50, quantity_input: '50', occurred_at: daysAgo(12) });
+  addTxn({ kind: 'customer_out', entity_id: 2, item_id: SHATTA, quantity: 30, quantity_input: '30', occurred_at: daysAgo(11) });
   addTxn({ kind: 'payment', entity_id: 1, payment_amount: 100, method: 'cash', occurred_at: daysAgo(9), note: 'دفعة نقدي' });
-  addTxn({ kind: 'customer_out', entity_id: 3, item_id: 6, quantity: 12.5, quantity_input: '12ك500غ', occurred_at: daysAgo(8) });
-  addTxn({ kind: 'customer_out', entity_id: 4, item_id: 4, quantity: 25, quantity_input: '25', occurred_at: daysAgo(6) });
-
-  // ===== دورة تصنيع هالأسبوع (عشان تقرير الفاقد يبيّن من أول لحظة) =====
-  // طلع ١٠ سطول، والوصفة ٠.١ سطل للجاط => المتوقّع ١٠٠ جاط
-  addTxn({ kind: 'operator_out', entity_id: 5, item_id: 1, quantity: 10, quantity_input: '10', occurred_at: thisWeek(2) });
-  // رجع ٩٢ بس => فاقد ٨ جاطات (٨٪)
-  addTxn({ kind: 'operator_in', entity_id: 5, item_id: 2, quantity: 92, quantity_input: '92', occurred_at: thisWeek(6) });
+  addTxn({ kind: 'customer_out', entity_id: 3, item_id: LABANEH, quantity: 12, quantity_input: '12', occurred_at: daysAgo(8) });
+  addTxn({ kind: 'customer_out', entity_id: 4, item_id: ZAATAR, quantity: 25, quantity_input: '25', occurred_at: daysAgo(6) });
 
   // حركات هالأسبوع
-  addTxn({ kind: 'customer_out', entity_id: 1, item_id: 2, quantity: 40, quantity_input: '40', occurred_at: thisWeek(8), created_by: 2, created_by_name: 'عبود' });
-  addTxn({ kind: 'customer_out', entity_id: 2, item_id: 8, quantity: 5, quantity_input: '5ك', occurred_at: thisWeek(10), created_by: 2, created_by_name: 'عبود' });
-  addTxn({ kind: 'payment', entity_id: 2, payment_amount: 120, method: 'bank', occurred_at: thisWeek(12), created_by: 2, created_by_name: 'عبود' });
-  addTxn({ kind: 'customer_out', entity_id: 3, item_id: 2, quantity: 20, quantity_input: '20', occurred_at: thisWeek(20), created_by: 2, created_by_name: 'عبود' });
-  addTxn({ kind: 'customer_return', entity_id: 1, item_id: 2, quantity: 5, quantity_input: '5', occurred_at: thisWeek(26), note: 'بضاعة راجعة' });
+  addTxn({ kind: 'customer_out', entity_id: 1, item_id: MAKDOUS_SMALL, quantity: 40, quantity_input: '40', occurred_at: thisWeek(8), created_by: 2, created_by_name: 'عبود' });
+  addTxn({ kind: 'customer_out', entity_id: 2, item_id: ZAATAR, quantity: 15, quantity_input: '15', occurred_at: thisWeek(10), created_by: 2, created_by_name: 'عبود' });
+  addTxn({ kind: 'payment', entity_id: 2, payment_amount: 120, method: 'bank', occurred_at: thisWeek(12) });
+  addTxn({ kind: 'customer_out', entity_id: 3, item_id: SHATTA, quantity: 20, quantity_input: '20', occurred_at: thisWeek(20), created_by: 2, created_by_name: 'عبود' });
+  addTxn({ kind: 'customer_return', entity_id: 1, item_id: SHATTA, quantity: 5, quantity_input: '5', occurred_at: thisWeek(26), note: 'بضاعة راجعة' });
 
   db.requests.push({ id: nextId(), entity_id: 3, entity_name: 'عمار', user_name: 'عمار',
     body: 'بدي كشف حساب مفصّل عن الشهر اللي فات لو سمحت', handled: false,
     created_at: daysAgo(2), handled_by_name: null });
 
-  notify('pending_price', 'صنف بدون سعر', '"جاط مكدوس" انضاف من عبود وبده سعر', true);
+  const noPrice = db.items.find((i) => !db.item_prices.some((p) => p.item_id === i.id));
+  notify('pending_price', 'صنف بدون سعر', `"${noPrice ? noPrice.name : 'صنف'}" بده سعر`, true);
   notify('customer_request', 'طلب/ملاحظة من عمار', 'بدي كشف حساب مفصّل عن الشهر اللي فات لو سمحت', true);
-  notify('negative_stock', 'رصيد صنف تحت الصفر', '"دبس رمان" صار رصيده سالب بعد آخر حركة');
+  notify('negative_stock', 'رصيد صنف تحت الصفر', '"لبنة 1ك" صار رصيده سالب بعد آخر حركة');
 
-  audit('create', 'transactions', 'سحب زبون - بلال - جاط زيتون × 40');
-  audit('update', 'item_prices', 'تغيير سعر "سطل زيتون" من 22 إلى 25');
+  audit('create', 'transactions', 'سحب زبون - بلال - مكدوس 1ك × 40');
+  audit('update', 'item_prices', 'تغيير سعر "شطة 5ك" من 3.100 إلى 3.250');
   audit('delete', 'transactions', 'حذف حركة #104 (سحب زبون - سعد - 87.50)');
 })();
 
@@ -294,15 +320,21 @@ const delay = () => new Promise((r) => setTimeout(r, 60)); // إحساس واق�
 // ---------- المعالجات ----------
 function listItems(q = {}) {
   let rows = db.items.filter((i) => (q.include_inactive === 'true' ? true : i.active));
-  if (q.search) rows = rows.filter((i) => i.name.includes(q.search));
-  if (q.letter) rows = rows.filter((i) => i.name.trim().startsWith(q.letter));
+  if (q.search) {
+    const t = normAr(q.search);
+    rows = rows.filter((i) => normAr(i.name).includes(t)
+      || normAr(i.base || '').includes(t)
+      || (i.aliases || []).some((a) => normAr(a).includes(t)));
+  }
+  if (q.letter) rows = rows.filter((i) => (i.base || i.name).trim().startsWith(q.letter));
   return rows.map((i) => {
     const price = priceAt(i.id, new Date());
     const base = { id: i.id, name: i.name, unit: i.unit, active: i.active,
+      base: i.base, size: i.size, size_unit: i.size_unit,
       has_recipe: db.item_components.some((c) => c.parent_item_id === i.id),
       last_movement_at: liveTxns().filter((t) => t.item_id === i.id)
         .map((t) => t.occurred_at).sort().pop() || null };
-    if (canSeeStock()) return { ...base, quantity: stockOf(i.id), current_price: price };
+    if (canSeeStock()) return { ...base, quantity: stockOf(i.id), current_price: price, cost_price: i.cost_price };
     return { ...base, ...(session.role === 'recorder' ? { needs_price: price == null } : {}) };
   }).sort((a, b) => a.name.localeCompare(b.name, 'ar'));
 }

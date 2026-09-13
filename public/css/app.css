@@ -488,6 +488,11 @@ input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--brand); 
   -webkit-tap-highlight-color: transparent;
 }
 .item-tile:hover { border-color: var(--brand); background: var(--brand-soft); }
+/* عائلة منتج: فيها أكتر من حجم - بتفتح على أحجامها */
+.item-tile.family { border-style: dashed; }
+.item-tile.family small { color: var(--brand); font-weight: 600; }
+.crumb { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.crumb b { font-family: var(--font-display); font-size: 15px; }
 .item-tile:active { transform: scale(.98); }
 .item-tile small { font-weight: 500; color: var(--muted); font-size: 11.5px; }
 

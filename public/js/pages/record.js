@@ -1,8 +1,17 @@
 import { api } from '../api.js';
-import { h, clear, toast, modal, dateTime, qty, money, METHOD_LABELS } from '../ui.js';
+import { h, clear, toast, modal, dateTime, qty } from '../ui.js';
 import { icon } from '../icons.js';
 
 const ARABIC_LETTERS = 'أبتثجحخدذرزسشصضطظعغفقكلمنهوي'.split('');
+
+/** تطبيع عربي مطابق للي بقاعدة البيانات: "شطه" = "شطة"، وبلا مسافات */
+function normalizeAr(text) {
+  return String(text || '').toLowerCase()
+    .replace(/[أإآٱ]/g, 'ا').replace(/ة/g, 'ه').replace(/[ىئ]/g, 'ي').replace(/ؤ/g, 'و')
+    .replace(/[\u064B-\u0652\u0640]/g, '')
+    .replace(/\s+/g, '');
+}
+const trimNum = (n) => String(Number(n)).replace(/\.0+$/, '');
 
 /** رمز فريد لكل محاولة تسجيل - بيمنع تسجيل نفس الحركة مرتين */
 function newToken() {
@@ -40,6 +49,7 @@ async function renderRecorder(root) {
   const ui = {
     party: null,        // الجهة المختارة
     direction: null,    // 'in' | 'out'
+    family: null,       // عائلة المنتج المفتوحة
     search: '',
     letter: '',
     items: [],
@@ -66,7 +76,7 @@ async function renderRecorder(root) {
   async function loadItems() {
     const { items } = await api.get('/api/items');
     ui.items = items;
-    ui.activeLetters = new Set(items.map((i) => i.name.trim()[0]));
+    ui.activeLetters = new Set(items.map((i) => (i.base || i.name).trim()[0]));
     drawPicker();
   }
   async function loadRecent() {
@@ -77,9 +87,7 @@ async function renderRecorder(root) {
       recentBox.append(h('div.recent-row', {},
         h('span.pill', {}, t.kind_label),
         h('b', {}, t.entity_name || 'المستودع'),
-        h('span.grow', {}, t.item_name
-          ? `${t.item_name} — ${qty(t.quantity, t.item_unit)}`
-          : `${money(t.payment_amount)} (${METHOD_LABELS[t.method] || ''})`),
+        h('span.grow', {}, `${t.item_name} — ${qty(t.quantity, t.item_unit)}`),
         h('span.muted', { style: 'font-size:12px' }, dateTime(t.occurred_at)),
         h('button.btn.ghost.sm', { onclick: () => editTransaction(t) }, 'تعديل'),
         h('button.btn.danger.sm', { onclick: () => deleteTransaction(t) }, 'حذف')));
@@ -124,11 +132,7 @@ async function renderRecorder(root) {
     steps.append(h('div.step', {},
       h('div.step-head', {}, h('span.step-no', {}, '٢'),
         h('b', {}, `${ui.party.name} — إدخال ولا إخراج؟`)),
-      dirGrid,
-      ui.party.type === 'customer'
-        ? h('div.row', { style: 'margin-top:12px' },
-            h('button.btn.gold', { onclick: openPayment }, 'تسجيل دفعة من ' + ui.party.name))
-        : null));
+      dirGrid));
   }
 
   // ================= الأصناف =================
@@ -147,18 +151,19 @@ async function renderRecorder(root) {
     if (!ui.party || !ui.direction) return;
 
     const searchInput = h('input', {
-      type: 'search', placeholder: 'دوّر على صنف بالاسم…', id: 'item-search',
+      type: 'search', placeholder: 'دوّر بالاسم — بيقبل "شطه" و"شطة5ك"…', id: 'item-search',
       value: ui.search,
-      oninput: (e) => { ui.search = e.target.value.trim(); ui.letter = ''; drawGrid(); drawAlpha(); },
+      oninput: (e) => { ui.search = e.target.value.trim(); ui.letter = ''; ui.family = null; drawGrid(); drawAlpha(); },
     });
     const itemGrid = h('div.item-grid');
     const alphaBar = h('div.alpha-bar');
+    const crumb = h('div.crumb');
 
     function drawAlpha() {
       clear(alphaBar);
       alphaBar.append(h('button', {
         class: ui.letter === '' ? 'active' : '',
-        onclick: () => { ui.letter = ''; drawAlpha(); drawGrid(); },
+        onclick: () => { ui.letter = ''; ui.family = null; drawAlpha(); drawGrid(); },
       }, '⌂'));
       for (const letter of ARABIC_LETTERS) {
         const has = ui.activeLetters.has(letter)
@@ -167,24 +172,72 @@ async function renderRecorder(root) {
           class: `${ui.letter === letter ? 'active' : ''} ${has ? '' : 'off'}`.trim(),
           onclick: () => {
             ui.letter = ui.letter === letter ? '' : letter;
-            ui.search = ''; searchInput.value = '';
+            ui.search = ''; searchInput.value = ''; ui.family = null;
             drawAlpha(); drawGrid();
           },
         }, letter));
       }
     }
 
+    /** الأصناف بعد البحث/الحرف */
+    function filtered() {
+      let list = ui.items;
+      if (ui.search) {
+        const t = normalizeAr(ui.search);
+        list = list.filter((i) => normalizeAr(i.name).includes(t)
+          || normalizeAr(i.base || '').includes(t));
+      }
+      if (ui.letter) {
+        const variants = ui.letter === 'أ' ? ['أ', 'ا', 'إ', 'آ'] : [ui.letter];
+        list = list.filter((i) => variants.includes((i.base || i.name).trim()[0]));
+      }
+      return list;
+    }
+
     function drawGrid() {
-      clear(itemGrid);
-      const list = visibleItems();
+      clear(itemGrid); clear(crumb);
+      const list = filtered();
+
       if (!list.length) {
         itemGrid.append(h('div', { style: 'grid-column:1/-1' }, h('div.empty', {}, 'ما في أصناف مطابقة')));
         return;
       }
+
+      // البحث بيعرض الأصناف مباشرة - المستخدم عارف شو بده
+      if (ui.search) { drawItems(list); return; }
+
+      // عائلة مختارة => أحجامها
+      if (ui.family) {
+        const sizes = list.filter((i) => (i.base || i.name) === ui.family);
+        crumb.append(
+          h('button.btn.ghost.sm', { onclick: () => { ui.family = null; drawGrid(); } }, '→ كل الأصناف'),
+          h('b', {}, ui.family));
+        drawItems(sizes);
+        return;
+      }
+
+      // الافتراضي: عائلات المنتجات (٩٣ عائلة بدل ٢٣٣ صنف)
+      const families = new Map();
+      for (const i of list) {
+        const key = i.base || i.name;
+        if (!families.has(key)) families.set(key, []);
+        families.get(key).push(i);
+      }
+      for (const [name, members] of families) {
+        if (members.length === 1) { drawItems(members, itemGrid); continue; }
+        itemGrid.append(h('div.item-tile.family', {
+          onclick: () => { ui.family = name; drawGrid(); },
+        },
+          h('span', {}, name),
+          h('small', {}, `${members.length} أحجام`)));
+      }
+    }
+
+    function drawItems(list, target = itemGrid) {
       for (const item of list) {
-        itemGrid.append(h('div.item-tile', { onclick: () => openQuantity(item) },
-          h('span', {}, item.name),
-          h('small', {}, item.unit === 'kg' ? 'بالوزن' : 'بالعدد'),
+        target.append(h('div.item-tile', { onclick: () => openQuantity(item) },
+          h('span', {}, item.size ? `${trimNum(item.size)}${item.size_unit || ''}` : item.name),
+          h('small', {}, item.size ? item.name : (item.unit === 'kg' ? 'بالوزن' : 'بالعدد')),
           item.needs_price ? h('small', { style: 'color:var(--warn)' }, 'بدون سعر') : null));
       }
     }
@@ -195,11 +248,11 @@ async function renderRecorder(root) {
         h('b', {}, `${labels[ui.direction]} — اختار الصنف`)),
       h('div.cashier-bar', {}, searchInput,
         h('button.btn.gold', { onclick: openNewItem }, 'صنف جديد')),
+      crumb,
       h('div.cashier', {}, alphaBar, h('div.cashier-main', {}, itemGrid))));
 
     drawAlpha();
     drawGrid();
-    // على الآيباد خطوة الأصناف بتوقع تحت حدّ الشاشة - بننزّلها لعنده
     requestAnimationFrame(() => picker.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
   }
 
@@ -286,38 +339,6 @@ async function renderRecorder(root) {
     });
   }
 
-  function openPayment() {
-    const amount = h('input', { type: 'text', inputmode: 'decimal', id: 'pay-amount', placeholder: 'المبلغ' });
-    const method = h('select', { id: 'pay-method' },
-      h('option', { value: 'cash' }, 'نقدي'),
-      h('option', { value: 'bank' }, 'تحويل بنكي'),
-      h('option', { value: 'check' }, 'شيك'));
-    const note = h('input', { type: 'text', id: 'pay-note', placeholder: 'رقم الشيك / ملاحظة (اختياري)' });
-    const token = newToken();
-
-    return modal({
-      title: `دفعة من ${ui.party.name}`,
-      confirmText: 'تسجيل',
-      body: h('div.grid', {},
-        h('label.field', {}, 'المبلغ', amount),
-        h('label.field', {}, 'طريقة الدفع', method),
-        h('label.field', {}, 'ملاحظة', note)),
-      onConfirm: async () => {
-        if (!amount.value.trim()) throw new Error('أدخل المبلغ');
-        const result = await api.post('/api/transactions', {
-          kind: 'payment',
-          entity_id: ui.party.id,
-          payment_amount: amount.value.trim(),
-          method: method.value,
-          note: note.value.trim() || undefined,
-          client_token: token,
-        });
-        toast(result.duplicate ? 'الدفعة مسجّلة أصلاً' : `تم تسجيل دفعة ${ui.party.name}`);
-        loadRecent();
-      },
-    });
-  }
-
   function openNewItem() {
     const name = h('input', { type: 'text', id: 'new-item-name', placeholder: 'اسم الصنف' });
     const unit = h('select', { id: 'new-item-unit' },
@@ -343,21 +364,17 @@ async function renderRecorder(root) {
   // ================= تعديل وحذف =================
   function editTransaction(txn) {
     const quantity = h('input', { type: 'text', id: 'edit-qty', value: txn.quantity_input || txn.quantity || '' });
-    const amount = h('input', { type: 'text', id: 'edit-amount', value: txn.payment_amount ?? '' });
     const note = h('input', { type: 'text', id: 'edit-note', value: txn.note || '' });
-    const isPayment = txn.kind === 'payment';
 
     return modal({
       title: `تعديل حركة #${txn.id}`,
       confirmText: 'حفظ التعديل',
       body: h('div.grid', {},
         h('div.muted', {}, `${txn.kind_label} — ${txn.entity_name || 'المستودع'} — ${txn.item_name || ''}`),
-        isPayment ? h('label.field', {}, 'المبلغ', amount) : h('label.field', {}, 'الكمية', quantity),
+        h('label.field', {}, 'الكمية', quantity),
         h('label.field', {}, 'ملاحظة', note)),
       onConfirm: async () => {
-        const payload = { note: note.value.trim() };
-        if (isPayment) payload.payment_amount = amount.value.trim();
-        else payload.quantity = quantity.value.trim();
+        const payload = { note: note.value.trim(), quantity: quantity.value.trim() };
         const result = await api.patch(`/api/transactions/${txn.id}`, payload);
         showWarnings(result.warnings);
         toast('تم التعديل');
