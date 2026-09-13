@@ -15,7 +15,8 @@
     "test": "node --test --test-concurrency=1 test/*.test.js",
     "backup": "node -e \"require('./src/jobs/backup').runBackup().then(r=>console.log(r))\"",
     "restore": "node scripts/restore.js",
-    "maintenance": "node -e \"require('./src/jobs/maintenance').runMaintenance().then(r=>console.log(r))\""
+    "maintenance": "node -e \"require('./src/jobs/maintenance').runMaintenance().then(r=>console.log(r))\"",
+    "preview": "node scripts/build-preview.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

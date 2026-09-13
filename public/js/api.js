@@ -25,6 +25,7 @@ export const api = {
   get: (p, params) => request('GET', p + qs(params)),
   post: (p, b) => request('POST', p, b),
   patch: (p, b) => request('PATCH', p, b),
+  put: (p, b) => request('PUT', p, b),
   del: (p) => request('DELETE', p),
 
   me: () => request('GET', '/api/auth/me'),
